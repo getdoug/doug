@@ -6,11 +6,11 @@ extern crate serde_derive;
 extern crate serde;
 extern crate serde_json;
 
+use std::env;
 use std::fs;
 use std::fs::OpenOptions;
-use std::io::Read;
-use std::io::Write;
-use std::path::Path;
+use std::io::{Read, Write, ErrorKind};
+use std::path::PathBuf;
 
 use chrono::{DateTime, Utc};
 use clap::{App, Arg, AppSettings, SubCommand};
@@ -72,18 +72,30 @@ fn main() {
 
 
 fn start_project(project_name: &str) {
-    let path = Path::new("doug.json");
-    let path_backup = Path::new("doug-backup.json");
+    let home_dir = env::var("HOME").expect("Failed to find home directory from environment 'HOME'");
+    let mut config_folder = PathBuf::from(home_dir);
+    config_folder.push(".config/doug");
+
+    match fs::create_dir(&config_folder) {
+        Err(ref error) if error.kind() == ErrorKind::AlreadyExists => {},
+        Err(error) => panic!("There was a problem creating the config directory: {:?}", error),
+        Ok(_) => {},
+    }
+
+    let mut config_file = PathBuf::from(&config_folder);
+    config_file.push("periods.json");
+
+    let config_file_backup = config_file.with_extension("json-backup");
 
     let mut file = OpenOptions::new()
                     .create(true)
                     .read(true)
                     .write(true)
-                    .open(path)
+                    .open(&config_file)
                     .unwrap();
 
     let mut s = String::new();
-    file.read_to_string(&mut s).unwrap();
+    file.read_to_string(&mut s).expect(&format!("Couldn't read data file: {:?}", config_file));
 
     let string_length = s.chars().count();
     let mut periods = match string_length {
@@ -113,17 +125,17 @@ fn start_project(project_name: &str) {
     print!("Started tracking project '{}'", current_period.project);
     periods.push(current_period);
 
-    let serialized = serde_json::to_string(&periods).unwrap();
+    let serialized = serde_json::to_string(&periods).expect("Couldn't serialize data to string");
     
-    fs::copy(path, path_backup).unwrap();
+    fs::copy(&config_file, &config_file_backup).expect("Couldn't create backup file");
     let mut file = OpenOptions::new()
                     .create(true)
                     .write(true)
                     .truncate(true)
-                    .open(path)
-                    .unwrap();
+                    .open(&config_file)
+                    .expect("Couldn't open file for saving period.");
 
-    file.write_all(serialized.as_bytes()).unwrap();
+    file.write_all(serialized.as_bytes()).expect("Couldn't write serialized data to file");
 }
 
 fn create_period(project: &str) -> Period {
