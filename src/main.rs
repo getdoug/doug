@@ -4,7 +4,7 @@ extern crate clap;
 use clap::{App, Arg, AppSettings, SubCommand};
 
 fn main() {
-    App::new("Rus")
+    App::new("Doug")
         .version(crate_version!())
         .about("A time tracking command-line utility")
         .author(crate_authors!())

@@ -1,4 +1,4 @@
-# Rus
+# Doug
 > A time tracking command-line utility
 
 ## Why?
