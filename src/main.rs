@@ -1,10 +1,30 @@
 #[macro_use]
 extern crate clap;
+extern crate chrono;
+#[macro_use]
+extern crate serde_derive;
+extern crate serde;
+extern crate serde_json;
 
+use std::fs;
+use std::fs::OpenOptions;
+use std::io::Read;
+use std::io::Write;
+use std::path::Path;
+
+use chrono::{DateTime, Utc};
 use clap::{App, Arg, AppSettings, SubCommand};
+use serde_json::Error;
+
+#[derive(Serialize, Deserialize, Debug)]
+struct Period<'a> {
+    project: &'a str,
+    start_time: DateTime<Utc>,
+    end_time: Option<DateTime<Utc>>,
+}
 
 fn main() {
-    App::new("Doug")
+    let matches = App::new("Doug")
         .version(crate_version!())
         .about("A time tracking command-line utility")
         .author(crate_authors!())
@@ -42,4 +62,74 @@ fn main() {
             .arg(Arg::with_name("repo")
                 .help("project to track")))
         .get_matches();
+
+    if let Some(matches) = matches.subcommand_matches("start") {
+        if matches.is_present("project") {
+            start_project(matches.value_of("project").unwrap());
+        }
+    }
+}
+
+
+fn start_project(project_name: &str) {
+    let path = Path::new("doug.json");
+    let path_backup = Path::new("doug-backup.json");
+
+    let mut file = OpenOptions::new()
+                    .create(true)
+                    .read(true)
+                    .write(true)
+                    .open(path)
+                    .unwrap();
+
+    let mut s = String::new();
+    file.read_to_string(&mut s).unwrap();
+
+    let string_length = s.chars().count();
+    let mut periods = match string_length {
+        0 => Vec::new(),
+        _ => {
+            let result: Result<Vec<Period>, Error> = serde_json::from_str(&s);
+            let periods: Vec<Period> = match result {
+                Ok(result) => result,
+                Err(error) => panic!("Couldn't deserialize data. Error: {:?}", error),
+            };
+            periods
+        },
+    };
+
+    if !periods.is_empty() {
+        let last_index = periods.len() - 1;
+        if let Some(period) = periods.get_mut(last_index) {
+            if period.end_time.is_none() {
+                eprintln!("Sorry, you're currently tracking project: {}", period.project);
+                eprintln!("Try stopping your current project with `stop` first.`");
+                return
+            }
+        }
+    } 
+    let current_period = create_period(project_name);
+    // store current period in file
+    print!("Started tracking project '{}'", current_period.project);
+    periods.push(current_period);
+
+    let serialized = serde_json::to_string(&periods).unwrap();
+    
+    fs::copy(path, path_backup).unwrap();
+    let mut file = OpenOptions::new()
+                    .create(true)
+                    .write(true)
+                    .truncate(true)
+                    .open(path)
+                    .unwrap();
+
+    file.write_all(serialized.as_bytes()).unwrap();
+}
+
+fn create_period(project: &str) -> Period {
+    return Period {
+        project: project,
+        start_time: Utc::now(),
+        end_time: None,
+    }
 }
