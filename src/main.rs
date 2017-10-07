@@ -8,8 +8,8 @@ extern crate serde_json;
 
 use std::env;
 use std::fs;
-use std::fs::OpenOptions;
-use std::io::{Read, Write, ErrorKind};
+use std::fs::{OpenOptions, File};
+use std::io::{Write, ErrorKind};
 use std::path::PathBuf;
 
 use chrono::{DateTime, Utc};
@@ -17,8 +17,8 @@ use clap::{App, Arg, AppSettings, SubCommand};
 use serde_json::Error;
 
 #[derive(Serialize, Deserialize, Debug)]
-struct Period<'a> {
-    project: &'a str,
+struct Period {
+    project: String,
     start_time: DateTime<Utc>,
     end_time: Option<DateTime<Utc>>,
 }
@@ -72,49 +72,14 @@ fn main() {
 
 
 fn start_project(project_name: &str) {
-    let home_dir = env::var("HOME").expect("Failed to find home directory from environment 'HOME'");
-    let mut config_folder = PathBuf::from(home_dir);
-    config_folder.push(".config/doug");
 
-    match fs::create_dir(&config_folder) {
-        Err(ref error) if error.kind() == ErrorKind::AlreadyExists => {},
-        Err(error) => panic!("There was a problem creating the config directory: {:?}", error),
-        Ok(_) => {},
-    }
-
-    let mut config_file = PathBuf::from(&config_folder);
-    config_file.push("periods.json");
-
-    let config_file_backup = config_file.with_extension("json-backup");
-
-    let mut file = OpenOptions::new()
-                    .create(true)
-                    .read(true)
-                    .write(true)
-                    .open(&config_file)
-                    .unwrap();
-
-    let mut s = String::new();
-    file.read_to_string(&mut s).expect(&format!("Couldn't read data file: {:?}", config_file));
-
-    let string_length = s.chars().count();
-    let mut periods = match string_length {
-        0 => Vec::new(),
-        _ => {
-            let result: Result<Vec<Period>, Error> = serde_json::from_str(&s);
-            let periods: Vec<Period> = match result {
-                Ok(result) => result,
-                Err(error) => panic!("Couldn't deserialize data. Error: {:?}", error),
-            };
-            periods
-        },
-    };
+    let mut periods = get_periods();
 
     if !periods.is_empty() {
         let last_index = periods.len() - 1;
         if let Some(period) = periods.get_mut(last_index) {
             if period.end_time.is_none() {
-                eprintln!("Sorry, you're currently tracking project: {}", period.project);
+                eprintln!("Sorry, you're currently tracking project `{}`, started `{}`", period.project, period.start_time);
                 eprintln!("Try stopping your current project with `stop` first.`");
                 return
             }
@@ -124,9 +89,71 @@ fn start_project(project_name: &str) {
     // store current period in file
     print!("Started tracking project '{}'", current_period.project);
     periods.push(current_period);
+    save_periods(periods);
+}
 
+fn create_period(project: &str) -> Period {
+    Period {
+        project: String::from(project),
+        start_time: Utc::now(),
+        end_time: None,
+    }
+}
+
+fn get_config_folder() -> PathBuf {
+    let home_dir = env::var("HOME").expect("Failed to find home directory from environment 'HOME'");
+    let mut config_folder = PathBuf::from(home_dir);
+    config_folder.push(".config/doug");
+    config_folder
+}
+
+fn get_config_file_path() -> PathBuf {
+    let config_folder = get_config_folder();
+    let mut config_file = PathBuf::from(&config_folder);
+    config_file.push("periods.json");
+    config_file
+}
+
+fn get_config_back_file_path() -> PathBuf {
+    let config_file = get_config_file_path();
+    config_file.with_extension("json-backup")
+}
+
+fn get_config_file() -> File {
+    let config_file = get_config_file_path();
+    OpenOptions::new()
+        .create(true)
+        .read(true)
+        .write(true)
+        .open(&config_file)
+        .expect(&format!("Couldn't open configuration file: {:?}", config_file))
+}
+
+
+fn get_periods() -> Vec<Period> {
+    let config_folder = get_config_folder();
+
+    match fs::create_dir(&config_folder) {
+        Err(ref error) if error.kind() == ErrorKind::AlreadyExists => {},
+        Err(error) => panic!("There was a problem creating the config directory: {:?}", error),
+        Ok(_) => {},
+    }
+
+    let file = get_config_file();
+
+    let periods: Result<Vec<Period>, Error> = serde_json::from_reader(file);
+    let periods = match periods {
+        Ok(p) => p,
+        Err(ref error) if error.is_eof() => Vec::new(),
+        Err(error) => panic!("There was a serialization issue: {:?}", error),
+    };
+    periods
+}
+
+fn save_periods(periods: Vec<Period>) {
     let serialized = serde_json::to_string(&periods).expect("Couldn't serialize data to string");
-    
+    let config_file = get_config_file_path();
+    let config_file_backup = get_config_back_file_path();
     fs::copy(&config_file, &config_file_backup).expect("Couldn't create backup file");
     let mut file = OpenOptions::new()
                     .create(true)
@@ -136,12 +163,4 @@ fn start_project(project_name: &str) {
                     .expect("Couldn't open file for saving period.");
 
     file.write_all(serialized.as_bytes()).expect("Couldn't write serialized data to file");
-}
-
-fn create_period(project: &str) -> Period {
-    return Period {
-        project: project,
-        start_time: Utc::now(),
-        end_time: None,
-    }
 }
