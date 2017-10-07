@@ -12,6 +12,8 @@ fn main() {
             AppSettings::DeriveDisplayOrder,
             AppSettings::GlobalVersion,
             AppSettings::SubcommandRequiredElseHelp,
+            AppSettings::VersionlessSubcommands,
+            AppSettings::DisableHelpSubcommand,
         ])
         .subcommand(SubCommand::with_name("start")
             .about("Track new or existing project")
