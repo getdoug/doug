@@ -8,7 +8,7 @@ extern crate serde_json;
 
 use std::env;
 use std::fs;
-use std::fs::{OpenOptions, File};
+use std::fs::{OpenOptions, File, Metadata};
 use std::io::{Write, ErrorKind};
 use std::path::PathBuf;
 
@@ -195,14 +195,16 @@ fn get_config_back_file_path() -> PathBuf {
     config_file.with_extension("json-backup")
 }
 
-fn get_config_file() -> File {
+fn get_config_file() -> (File, Metadata) {
     let config_file = get_config_file_path();
-    OpenOptions::new()
+    (OpenOptions::new()
         .create(true)
         .read(true)
         .write(true)
         .open(&config_file)
-        .expect(&format!("Couldn't open configuration file: {:?}", config_file))
+        .expect(&format!("Couldn't open datafile: {:?}", config_file)),
+    fs::metadata(&config_file).expect("Couldn't access datafile metadata")
+    )
 }
 
 
@@ -215,12 +217,12 @@ fn get_periods() -> Vec<Period> {
         Ok(_) => {},
     }
 
-    let file = get_config_file();
+    let (file, metadata) = get_config_file();
 
     let periods: Result<Vec<Period>, Error> = serde_json::from_reader(file);
     let periods = match periods {
         Ok(p) => p,
-        Err(ref error) if error.is_eof() => Vec::new(),
+        Err(_) if metadata.len() > 0 => Vec::new(),
         Err(error) => panic!("There was a serialization issue: {:?}", error),
     };
     periods
