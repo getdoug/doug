@@ -12,7 +12,7 @@ use std::fs::{OpenOptions, File, Metadata};
 use std::io::{Write, ErrorKind};
 use std::path::PathBuf;
 
-use chrono::{DateTime, Utc};
+use chrono::{DateTime, Utc, Local, TimeZone, Duration};
 use clap::{App, Arg, AppSettings, SubCommand};
 use serde_json::Error;
 
@@ -159,7 +159,38 @@ fn restart() {
 }
 
 fn log() {
-    unimplemented!();
+    let periods = get_periods();
+    let periods_iter = periods.iter();
+
+    for period in periods_iter {
+        match period.end_time {
+            Some(end_time) => {
+                let diff = end_time.signed_duration_since(period.start_time);
+                println!("{} from {} to {} [{}]", period.project, humanize_datetime(period.start_time), humanize_datetime(end_time), humanize_hours(diff));
+            },
+            None => {
+                let diff = Utc::now().signed_duration_since(period.start_time);
+                println!("{} from {} to {} [{}]", period.project, humanize_datetime(period.start_time), "in-progress", humanize_hours(diff));
+            },
+        }
+    }
+}
+
+fn humanize_datetime(time: DateTime<Utc>) -> String {
+    Local.from_utc_datetime(&time.naive_utc()).format("%F %H:%I %p").to_string()
+}
+
+fn humanize_hours(time: Duration) -> String {
+    let hours = time.num_hours();
+    let minutes = time.num_minutes();
+    let seconds = time.num_seconds();
+    if minutes == 0 {
+        return format!("{seconds} second(s)", seconds=seconds)
+    } else if hours == 0 {
+        return format!("{minutes} minute(s)", minutes=minutes)
+    } else {
+        format!("{hours}:{minutes}", hours=hours, minutes=minutes)
+    }
 }
 
 fn report() {
