@@ -132,7 +132,15 @@ fn stop() {
 }
 
 fn cancel() {
-    unimplemented!();
+    let mut periods = get_periods();
+    if let Some(period) = periods.pop() {
+        if period.end_time.is_none() {
+            save_periods(periods);
+            println!("Canceled running project: {}", period.project);
+            return
+        }
+    }
+    eprintln!("No running project to cancel");
 }
 
 fn restart() {
