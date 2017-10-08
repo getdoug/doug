@@ -16,7 +16,7 @@ use chrono::{DateTime, Utc};
 use clap::{App, Arg, AppSettings, SubCommand};
 use serde_json::Error;
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 struct Period {
     project: String,
     start_time: DateTime<Utc>,
@@ -59,19 +59,38 @@ fn main() {
                 .required(true)))
         .subcommand(SubCommand::with_name("edit")
             .about("Edit last frame or currently running frame")
-            .arg(Arg::with_name("repo")
+            .arg(Arg::with_name("project")
                 .help("project to track")))
         .get_matches();
 
     if let Some(matches) = matches.subcommand_matches("start") {
         if matches.is_present("project") {
-            start_project(matches.value_of("project").unwrap());
+            start(matches.value_of("project").unwrap());
         }
+    }
+
+    if let Some(matches) = matches.subcommand_matches("amend") {
+        if matches.is_present("project") {
+            amend(matches.value_of("project").expect("missing project name"));
+        }
+    }
+
+    if let Some(matches) = matches.subcommand_matches("edit") {
+        edit(matches.value_of("project"));
+    }
+
+    match matches.subcommand_name() {
+        Some("stop") => stop(),
+        Some("cancel") => cancel(),
+        Some("restart") => restart(),
+        Some("log") => log(),
+        Some("report") => report(),
+        _ => {},
     }
 }
 
 
-fn start_project(project_name: &str) {
+fn start(project_name: &str) {
 
     let mut periods = get_periods();
 
@@ -89,7 +108,56 @@ fn start_project(project_name: &str) {
     // store current period in file
     print!("Started tracking project '{}'", current_period.project);
     periods.push(current_period);
-    save_periods(periods);
+    save_periods(periods.to_vec());
+}
+
+fn stop() {
+    let mut periods = get_periods();
+    let mut updated_period = false;
+    let last_index = periods.len() - 1;
+    if periods.len() > 0 {
+        if let Some(period) = periods.get_mut(last_index) {
+            if period.end_time.is_none() {
+                period.end_time = Some(Utc::now());
+                updated_period = true;
+                println!("Stopped project: `{}`", period.project);
+            }
+        }
+    }
+    if updated_period {
+        save_periods(periods);
+    } else {
+        eprintln!("No running project to stop.");
+    }
+}
+
+fn cancel() {
+    unimplemented!();
+}
+
+fn restart() {
+    unimplemented!();
+}
+
+fn log() {
+    unimplemented!();
+}
+
+fn report() {
+    unimplemented!();
+}
+
+fn amend(project_name: &str) {
+    println!("Amend project: {:?}", project_name);
+    unimplemented!();
+}
+
+
+fn edit(project_name: Option<&str>) {
+    if let Some(name) = project_name {
+        println!("Edit project: {}", name);
+    }
+    unimplemented!();
 }
 
 fn create_period(project: &str) -> Period {
