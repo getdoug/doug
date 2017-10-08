@@ -144,7 +144,18 @@ fn cancel() {
 }
 
 fn restart() {
-    unimplemented!();
+    let periods = get_periods();
+    let mut new_periods = periods.to_vec();
+    if let Some(period) = periods.last() {
+        if !period.end_time.is_none() {
+            let new_period = create_period(&period.project);
+            new_periods.push(new_period);
+            save_periods(new_periods);
+            println!("Tracking last running project: {}", period.project);
+            return
+        }
+    }
+    eprintln!("No running project to cancel");
 }
 
 fn log() {
