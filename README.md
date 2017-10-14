@@ -3,8 +3,8 @@
 
 ## Why?
 
-Python, along with many other interpreted languages, has a [slow startup
-time][0]. A Rust based time tracker can avoid this issue.
+Many interpreted languages have [slow startup times][0].
+A Rust based time tracker can avoid this issue.
 
 ## Usage
 ```
@@ -127,7 +127,7 @@ ARGS:
     <repo>    project to track
 ```
 
-## Previous Work
+## Prior Art
 
 - <http://wtime.sourceforge.net>
 - <https://github.com/TailorDev/Watson>
