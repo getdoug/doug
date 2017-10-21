@@ -13,8 +13,9 @@ use std::fs;
 use std::fs::{OpenOptions, File, Metadata};
 use std::io::{Write, ErrorKind};
 use std::path::PathBuf;
+use std::collections::HashSet;
 
-use chrono::{DateTime, Utc, Local, Duration};
+use chrono::{DateTime, Date, Utc, Local, Duration};
 use clap::{App, Arg, AppSettings, SubCommand};
 use serde_json::Error;
 use colored::*;
@@ -180,27 +181,50 @@ fn restart() {
 fn log() {
     let periods = get_periods();
     let periods_iter = periods.iter();
+    let mut days: HashSet<Date<chrono::Local>> = HashSet::new();
 
     for period in periods_iter {
+        let time = period.start_time.with_timezone(&Local).date();
+        if !days.contains(&time) {
+            // Monday 16 October 2017 (3h 20m 52s)
+            println!("{}", period.start_time.with_timezone(&Local).format("%A %-d %B %Y").to_string());
+        }
+        days.insert(time);
         match period.end_time {
             Some(end_time) => {
                 let diff = end_time.signed_duration_since(period.start_time);
-                println!("{} from {} to {} [{}]", period.project, humanize_datetime(period.start_time), humanize_datetime(end_time), humanize_duration(diff));
+                println!("    {start} to {end} {project} {duration}", project=period.project, start=humanize_time(period.start_time), end=humanize_time(end_time), duration=format_duration(diff));
             },
             None => {
                 let diff = Utc::now().signed_duration_since(period.start_time);
-                println!("{} from {} to {} [{}]", period.project, humanize_datetime(period.start_time), "in-progress", humanize_duration(diff));
+                println!("    {start} to --:-- {project} {duration}", project=period.project, start=humanize_time(period.start_time), duration=format_duration(diff));
             },
         }
     }
 }
 
 fn humanize_datetime(time: DateTime<Utc>) -> String {
-    time.with_timezone(&Local).format("%F %H:%I %p").to_string()
+    time.with_timezone(&Local).format("%F %H:%M").to_string()
 }
 
 fn humanize_time(time: DateTime<Utc>) -> String {
-    time.with_timezone(&Local).format("%H:%I %p").to_string()
+    time.with_timezone(&Local).format("%H:%M").to_string()
+}
+
+fn format_duration(duration: Duration) -> String{
+    let days = duration.num_days();
+    let hours = duration.num_hours();
+    let minutes = duration.num_minutes();
+    let seconds = duration.num_seconds();
+    if minutes == 0 {
+        return format!("{}s", seconds)
+    } else if hours == 0 {
+        return format!("{minutes}m", minutes=minutes)
+    } else if days == 0 {
+        return format!("{hours}h, {minutes}m", hours=hours, minutes=minutes/(hours*60))
+    } else {
+        return format!("{days}d, {hours}h, {minutes}m", hours=hours/(days*24), minutes=minutes/(hours*60), days=days)
+    }
 }
 
 fn humanize_duration(time: Duration) -> String {
