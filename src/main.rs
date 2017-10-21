@@ -55,7 +55,7 @@ fn main() {
         .subcommand(SubCommand::with_name("log")
             .about("Display time intervals across all projects"))
         .subcommand(SubCommand::with_name("report")
-            .about("Display aggregate time from last week"))
+            .about("Display aggregate time from projects"))
         .subcommand(SubCommand::with_name("amend")
             .about("Change name of currently running project")
             .arg(Arg::with_name("project")
@@ -65,6 +65,11 @@ fn main() {
             .about("Edit last frame or currently running frame")
             .arg(Arg::with_name("project")
                 .help("project to track")))
+        .subcommand(SubCommand::with_name("delete")
+            .about("Delete all intervals for project")
+            .arg(Arg::with_name("project")
+                .help("new project name")
+                .required(true)))
         .get_matches();
 
     if let Some(matches) = matches.subcommand_matches("start") {
@@ -83,13 +88,17 @@ fn main() {
         edit(matches.value_of("project"));
     }
 
+    if let Some(matches) = matches.subcommand_matches("delete") {
+        delete(matches.value_of("project").expect("missing project name"));
+    }
+
     match matches.subcommand_name() {
+        Some("status") => status(),
         Some("stop") => stop(),
         Some("cancel") => cancel(),
         Some("restart") => restart(),
         Some("log") => log(),
         Some("report") => report(),
-        Some("status") => status(),
         _ => {},
     }
 }
@@ -211,6 +220,50 @@ fn log() {
     }
 }
 
+fn report() {
+    let periods = get_periods();
+    let mut days: HashMap<String, Vec<Period>> = HashMap::new();
+    let mut start_date = Utc::now().with_timezone(&Local).date();
+    let mut results = Vec::new();
+
+    for period in periods.iter() {
+        days.entry(period.project.clone()).or_insert(Vec::new()).push(period.clone());
+    }
+    for (project, intervals) in days.iter() {
+        let d = intervals.into_iter().fold(Duration::zero(), |acc, ref x| acc + (x.end_time.unwrap_or(Utc::now()).signed_duration_since(x.start_time)));
+        for x in intervals.iter() {
+            if x.start_time.with_timezone(&Local).date() < start_date {
+                start_date = x.start_time.with_timezone(&Local).date();
+            }
+        }
+        results.push(format!("{project} {duration}", project=project.green(), duration=format_duration(d).bold()));
+    }
+    println!("{start} -> {end}",
+        start=start_date.format("%A %-d %B %Y").to_string().blue(),
+        end=Utc::now().format("%A %-d %B %Y").to_string().blue());
+    for x in results.iter() {
+        println!("{}", x);
+    }
+}
+
+fn amend(project_name: &str) {
+    println!("Amend project: {:?}", project_name);
+    unimplemented!();
+}
+
+
+fn edit(project_name: Option<&str>) {
+    if let Some(name) = project_name {
+        println!("Edit project: {}", name);
+    }
+    unimplemented!();
+}
+
+fn delete(project_name: &str) {
+    println!("Delete project: {:?}", project_name);
+    unimplemented!();
+}
+
 fn humanize_datetime(time: DateTime<Utc>) -> String {
     time.with_timezone(&Local).format("%F %H:%M").to_string()
 }
@@ -253,23 +306,6 @@ fn humanize_duration(time: Duration) -> String {
     } else {
         return format!("{hours}:{minutes}", hours=hours, minutes=minutes)
     }
-}
-
-fn report() {
-    unimplemented!();
-}
-
-fn amend(project_name: &str) {
-    println!("Amend project: {:?}", project_name);
-    unimplemented!();
-}
-
-
-fn edit(project_name: Option<&str>) {
-    if let Some(name) = project_name {
-        println!("Edit project: {}", name);
-    }
-    unimplemented!();
 }
 
 fn create_period(project: &str) -> Period {
