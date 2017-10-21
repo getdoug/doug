@@ -247,8 +247,18 @@ fn report() {
 }
 
 fn amend(project_name: &str) {
-    println!("Amend project: {:?}", project_name);
-    unimplemented!();
+    let mut periods = get_periods();
+    if let Some(mut period) = periods.pop() {
+        if period.end_time.is_none() {
+            let old_name = period.project.clone();
+            period.project = String::from(project_name);
+            println!("Renamed tracking project {old} -> {new}", old=old_name.red(), new=period.project.green());
+            periods.push(period);
+            save_periods(periods);
+            return
+        }
+    }
+    eprintln!("Error: {}", "No project started".red());
 }
 
 
@@ -260,7 +270,7 @@ fn edit(project_name: Option<&str>) {
 }
 
 fn delete(project_name: &str) {
-    let mut periods = get_periods();
+    let periods = get_periods();
     let filtered_periods = periods.clone().into_iter().filter(|x| x.project != project_name).collect();
     if filtered_periods == periods {
         eprintln!("Error: {}", "Project not found.".red());
