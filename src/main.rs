@@ -5,6 +5,8 @@ extern crate chrono;
 extern crate serde_derive;
 extern crate serde;
 extern crate serde_json;
+extern crate colored;
+
 
 use std::env;
 use std::fs;
@@ -12,9 +14,10 @@ use std::fs::{OpenOptions, File, Metadata};
 use std::io::{Write, ErrorKind};
 use std::path::PathBuf;
 
-use chrono::{DateTime, Utc, Local, TimeZone, Duration};
+use chrono::{DateTime, Utc, Local, Duration};
 use clap::{App, Arg, AppSettings, SubCommand};
 use serde_json::Error;
+use colored::*;
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 struct Period {
@@ -85,30 +88,41 @@ fn main() {
         Some("restart") => restart(),
         Some("log") => log(),
         Some("report") => report(),
+        Some("status") => status(),
         _ => {},
     }
 }
 
 
 fn start(project_name: &str) {
-
     let mut periods = get_periods();
 
     if !periods.is_empty() {
         let last_index = periods.len() - 1;
         if let Some(period) = periods.get_mut(last_index) {
             if period.end_time.is_none() {
-                eprintln!("Sorry, you're currently tracking project `{}`, started `{}`", period.project, period.start_time);
-                eprintln!("Try stopping your current project with `stop` first.`");
-                return
+                let message = format!("project {} is being tracked", period.project);
+                eprintln!("Error: {}",  message.red());
+                return eprintln!("Try stopping your current project with {} first.", "stop".blue());
             }
         }
     } 
     let current_period = create_period(project_name);
     // store current period in file
-    print!("Started tracking project '{}'", current_period.project);
+    print!("Started tracking project {} at {}", current_period.project.blue(), humanize_time(current_period.start_time));
     periods.push(current_period);
     save_periods(periods.to_vec());
+}
+
+fn status() {
+    let mut periods = get_periods();
+    if let Some(period) = periods.pop() {
+        if period.end_time.is_none() {
+            let diff = Utc::now().signed_duration_since(period.start_time);
+            return println!("Project {} started {} ({})", period.project.magenta(), humanize_duration(diff), humanize_datetime(period.start_time).blue());
+        }
+    }
+    eprintln!("No running project");
 }
 
 fn stop() {
@@ -120,14 +134,15 @@ fn stop() {
             if period.end_time.is_none() {
                 period.end_time = Some(Utc::now());
                 updated_period = true;
-                println!("Stopped project: `{}`", period.project);
+                let diff = Utc::now().signed_duration_since(period.start_time);
+                println!("Stopped project {}, started {}", period.project.blue(), humanize_duration(diff));
             }
         }
     }
     if updated_period {
         save_periods(periods);
     } else {
-        eprintln!("No running project to stop.");
+        eprintln!("Error: {}", "No project started.".red());
     }
 }
 
@@ -136,11 +151,12 @@ fn cancel() {
     if let Some(period) = periods.pop() {
         if period.end_time.is_none() {
             save_periods(periods);
-            println!("Canceled running project: {}", period.project);
+            let diff = Utc::now().signed_duration_since(period.start_time);
+            println!("Canceled project {}, started {}", period.project.blue(), humanize_duration(diff));
             return
         }
     }
-    eprintln!("No running project to cancel");
+    eprintln!("Error: {}", "No project started".red());
 }
 
 fn restart() {
@@ -151,11 +167,14 @@ fn restart() {
             let new_period = create_period(&period.project);
             new_periods.push(new_period);
             save_periods(new_periods);
-            println!("Tracking last running project: {}", period.project);
-            return
+            return println!("Tracking last running project: {}", period.project.blue());
+        } else {
+            let message = format!("No project to restart. Project {} is being tracked", period.project);
+            eprintln!("Error: {}",  message.red());
+            return eprintln!("Try stopping your current project with {} first.", "stop".blue());
         }
     }
-    eprintln!("No running project to cancel");
+    eprintln!("Error: {}", "No previous project to restart".red());
 }
 
 fn log() {
@@ -166,30 +185,41 @@ fn log() {
         match period.end_time {
             Some(end_time) => {
                 let diff = end_time.signed_duration_since(period.start_time);
-                println!("{} from {} to {} [{}]", period.project, humanize_datetime(period.start_time), humanize_datetime(end_time), humanize_hours(diff));
+                println!("{} from {} to {} [{}]", period.project, humanize_datetime(period.start_time), humanize_datetime(end_time), humanize_duration(diff));
             },
             None => {
                 let diff = Utc::now().signed_duration_since(period.start_time);
-                println!("{} from {} to {} [{}]", period.project, humanize_datetime(period.start_time), "in-progress", humanize_hours(diff));
+                println!("{} from {} to {} [{}]", period.project, humanize_datetime(period.start_time), "in-progress", humanize_duration(diff));
             },
         }
     }
 }
 
 fn humanize_datetime(time: DateTime<Utc>) -> String {
-    Local.from_utc_datetime(&time.naive_utc()).format("%F %H:%I %p").to_string()
+    time.with_timezone(&Local).format("%F %H:%I %p").to_string()
 }
 
-fn humanize_hours(time: Duration) -> String {
+fn humanize_time(time: DateTime<Utc>) -> String {
+    time.with_timezone(&Local).format("%H:%I %p").to_string()
+}
+
+fn humanize_duration(time: Duration) -> String {
     let hours = time.num_hours();
     let minutes = time.num_minutes();
     let seconds = time.num_seconds();
     if minutes == 0 {
-        return format!("{seconds} second(s)", seconds=seconds)
+        if seconds < 5 {
+            return String::from("just now")
+        }
+        return String::from("seconds ago")
     } else if hours == 0 {
-        return format!("{minutes} minute(s)", minutes=minutes)
+        if minutes == 1 {
+            return format!("{minutes} minute ago", minutes=minutes)
+        } else {
+            return format!("{minutes} minutes ago", minutes=minutes)
+        }
     } else {
-        format!("{hours}:{minutes}", hours=hours, minutes=minutes)
+        return format!("{hours}:{minutes}", hours=hours, minutes=minutes)
     }
 }
 
