@@ -187,17 +187,17 @@ fn log() {
         let time = period.start_time.with_timezone(&Local).date();
         if !days.contains(&time) {
             // Monday 16 October 2017 (3h 20m 52s)
-            println!("{}", period.start_time.with_timezone(&Local).format("%A %-d %B %Y").to_string());
+            println!("{}", period.start_time.with_timezone(&Local).format("%A %-d %B %Y").to_string().green());
         }
         days.insert(time);
         match period.end_time {
             Some(end_time) => {
                 let diff = end_time.signed_duration_since(period.start_time);
-                println!("    {start} to {end} {project} {duration}", project=period.project, start=humanize_time(period.start_time), end=humanize_time(end_time), duration=format_duration(diff));
+                println!("    {start} to {end} {project} {duration}", project=period.project.blue(), start=humanize_time(period.start_time), end=humanize_time(end_time), duration=format_duration(diff));
             },
             None => {
                 let diff = Utc::now().signed_duration_since(period.start_time);
-                println!("    {start} to --:-- {project} {duration}", project=period.project, start=humanize_time(period.start_time), duration=format_duration(diff));
+                println!("    {start} to --:-- {project} {duration}", project=period.project.blue(), start=humanize_time(period.start_time), duration=format_duration(diff));
             },
         }
     }
