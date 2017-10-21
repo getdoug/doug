@@ -20,7 +20,7 @@ use clap::{App, Arg, AppSettings, SubCommand};
 use serde_json::Error;
 use colored::*;
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Eq, PartialEq, Serialize, Deserialize, Debug, Clone)]
 struct Period {
     project: String,
     start_time: DateTime<Utc>,
@@ -260,8 +260,14 @@ fn edit(project_name: Option<&str>) {
 }
 
 fn delete(project_name: &str) {
-    println!("Delete project: {:?}", project_name);
-    unimplemented!();
+    let mut periods = get_periods();
+    let filtered_periods = periods.clone().into_iter().filter(|x| x.project != project_name).collect();
+    if filtered_periods == periods {
+        eprintln!("Error: {}", "Project not found.".red());
+    } else {
+        save_periods(filtered_periods);
+        println!("Deleted project {project}", project=project_name.blue());
+    }
 }
 
 fn humanize_datetime(time: DateTime<Utc>) -> String {
