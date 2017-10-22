@@ -14,6 +14,7 @@ use std::fs::{OpenOptions, File, Metadata};
 use std::io::{Write, ErrorKind};
 use std::path::PathBuf;
 use std::collections::{HashMap};
+use std::process::Command;
 
 use chrono::{DateTime, Date, Utc, Local, Duration};
 use clap::{App, Arg, AppSettings, SubCommand};
@@ -62,9 +63,7 @@ fn main() {
                 .help("new project name")
                 .required(true)))
         .subcommand(SubCommand::with_name("edit")
-            .about("Edit last frame or currently running frame")
-            .arg(Arg::with_name("project")
-                .help("project to track")))
+            .about("Edit last frame or currently running frame"))
         .subcommand(SubCommand::with_name("delete")
             .about("Delete all intervals for project")
             .arg(Arg::with_name("project")
@@ -84,10 +83,6 @@ fn main() {
         }
     }
 
-    if let Some(matches) = matches.subcommand_matches("edit") {
-        edit(matches.value_of("project"));
-    }
-
     if let Some(matches) = matches.subcommand_matches("delete") {
         delete(matches.value_of("project").expect("missing project name"));
     }
@@ -99,6 +94,7 @@ fn main() {
         Some("restart") => restart(),
         Some("log") => log(),
         Some("report") => report(),
+        Some("edit") => edit(),
         _ => {},
     }
 }
@@ -262,11 +258,19 @@ fn amend(project_name: &str) {
 }
 
 
-fn edit(project_name: Option<&str>) {
-    if let Some(name) = project_name {
-        println!("Edit project: {}", name);
+fn edit() {
+    let path = get_config_file_path();
+    println!("File: {}", path.to_str().unwrap().blue());
+    if let Some(editor) = env::var_os("EDITOR") {
+        let mut edit = Command::new(editor);
+        edit.arg(path.clone());
+        let status = edit.status();
+        if !status.is_ok() {
+            eprintln!("Error: {}", "Problem with editing.".red());
+        }
+    } else {
+        eprintln!("Error: {}", "Couldn't open editor".red());
     }
-    unimplemented!();
 }
 
 fn delete(project_name: &str) {
