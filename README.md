@@ -3,8 +3,7 @@
 
 ## Why?
 
-Many interpreted languages have [slow startup times][0].
-A Rust based time tracker can avoid this issue.
+To have a time tracker that's not inhibited by [slow language startup times][0].
 
 ## Usage
 ```
