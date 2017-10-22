@@ -259,7 +259,7 @@ fn amend(project_name: &str) {
 
 
 fn edit() {
-    let path = get_config_file_path();
+    let path = get_data_file_path();
     println!("File: {}", path.to_str().unwrap().blue());
     if let Some(editor) = env::var_os("EDITOR") {
         let mut edit = Command::new(editor);
@@ -336,48 +336,48 @@ fn create_period(project: &str) -> Period {
     }
 }
 
-fn get_config_folder() -> PathBuf {
+fn get_data_folder() -> PathBuf {
     let home_dir = env::var("HOME").expect("Failed to find home directory from environment 'HOME'");
-    let mut config_folder = PathBuf::from(home_dir);
-    config_folder.push(".doug");
-    config_folder
+    let mut data_folder = PathBuf::from(home_dir);
+    data_folder.push(".doug");
+    data_folder
 }
 
-fn get_config_file_path() -> PathBuf {
-    let config_folder = get_config_folder();
-    let mut config_file = PathBuf::from(&config_folder);
-    config_file.push("periods.json");
-    config_file
+fn get_data_file_path() -> PathBuf {
+    let data_folder = get_data_folder();
+    let mut data_file = PathBuf::from(&data_folder);
+    data_file.push("periods.json");
+    data_file
 }
 
-fn get_config_back_file_path() -> PathBuf {
-    let config_file = get_config_file_path();
-    config_file.with_extension("json-backup")
+fn get_data_back_file_path() -> PathBuf {
+    let data_file = get_data_file_path();
+    data_file.with_extension("json-backup")
 }
 
-fn get_config_file() -> (File, Metadata) {
-    let config_file = get_config_file_path();
+fn get_data_file() -> (File, Metadata) {
+    let data_file = get_data_file_path();
     (OpenOptions::new()
         .create(true)
         .read(true)
         .write(true)
-        .open(&config_file)
-        .expect(&format!("Couldn't open datafile: {:?}", config_file)),
-    fs::metadata(&config_file).expect("Couldn't access datafile metadata")
+        .open(&data_file)
+        .expect(&format!("Couldn't open datafile: {:?}", data_file)),
+    fs::metadata(&data_file).expect("Couldn't access datafile metadata")
     )
 }
 
 
 fn get_periods() -> Vec<Period> {
-    let config_folder = get_config_folder();
+    let data_folder = get_data_folder();
 
-    match fs::create_dir(&config_folder) {
+    match fs::create_dir(&data_folder) {
         Err(ref error) if error.kind() == ErrorKind::AlreadyExists => {},
-        Err(error) => panic!("There was a problem creating the config directory: {:?}", error),
+        Err(error) => panic!("There was a problem creating the data directory: {:?}", error),
         Ok(_) => {},
     }
 
-    let (file, metadata) = get_config_file();
+    let (file, metadata) = get_data_file();
 
     let periods: Result<Vec<Period>, Error> = serde_json::from_reader(file);
     let periods = match periods {
@@ -391,14 +391,14 @@ fn get_periods() -> Vec<Period> {
 
 fn save_periods(periods: Vec<Period>) {
     let serialized = serde_json::to_string(&periods).expect("Couldn't serialize data to string");
-    let config_file = get_config_file_path();
-    let config_file_backup = get_config_back_file_path();
-    fs::copy(&config_file, &config_file_backup).expect("Couldn't create backup file");
+    let data_file = get_data_file_path();
+    let data_file_backup = get_data_back_file_path();
+    fs::copy(&data_file, &data_file_backup).expect("Couldn't create backup file");
     let mut file = OpenOptions::new()
                     .create(true)
                     .write(true)
                     .truncate(true)
-                    .open(&config_file)
+                    .open(&data_file)
                     .expect("Couldn't open file for saving period.");
 
     file.write_all(serialized.as_bytes()).expect("Couldn't write serialized data to file");
