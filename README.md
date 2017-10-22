@@ -22,9 +22,10 @@ SUBCOMMANDS:
     cancel     Stop running project and remove most recent time interval
     restart    Track last running project
     log        Display time intervals across all projects
-    report     Display aggregate time from last week
+    report     Display aggregate time from projects
     amend      Change name of currently running project
     edit       Edit last frame or currently running frame
+    delete     Delete all intervals for project
 ```
 
 ### start
@@ -92,7 +93,7 @@ FLAGS:
 ```
 ### report
 ```
-Display aggregate time from last week
+Display aggregate time from projects
 
 USAGE:
     doug report
@@ -126,7 +127,19 @@ FLAGS:
 ARGS:
     <repo>    project to track
 ```
+### delete
+```
+Delete all intervals for project
 
+USAGE:
+    doug delete <project>
+
+FLAGS:
+    -h, --help    Prints help information
+
+ARGS:
+    <project>    new project name
+```
 ## Prior Art
 
 - <http://wtime.sourceforge.net>
