@@ -339,7 +339,7 @@ fn create_period(project: &str) -> Period {
 fn get_config_folder() -> PathBuf {
     let home_dir = env::var("HOME").expect("Failed to find home directory from environment 'HOME'");
     let mut config_folder = PathBuf::from(home_dir);
-    config_folder.push(".config/doug");
+    config_folder.push(".doug");
     config_folder
 }
 
@@ -383,6 +383,7 @@ fn get_periods() -> Vec<Period> {
     let periods = match periods {
         Ok(p) => p,
         Err(_) if metadata.len() > 0 => Vec::new(),
+        Err(ref error) if error.is_eof() => Vec::new(),
         Err(error) => panic!("There was a serialization issue: {:?}", error),
     };
     periods
