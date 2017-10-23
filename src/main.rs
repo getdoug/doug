@@ -10,9 +10,9 @@ extern crate colored;
 
 use std::env;
 use std::fs;
-use std::fs::{OpenOptions, File, Metadata};
-use std::io::{Write, ErrorKind};
-use std::path::PathBuf;
+use std::fs::{OpenOptions, DirBuilder};
+use std::io::Write;
+use std::path::{PathBuf, Path};
 use std::collections::{HashMap};
 use std::process::Command;
 
@@ -102,10 +102,8 @@ fn main() {
 
 fn start(project_name: &str) {
     let mut periods = get_periods();
-
     if !periods.is_empty() {
-        let last_index = periods.len() - 1;
-        if let Some(period) = periods.get_mut(last_index) {
+        if let Some(period) = periods.last_mut() {
             if period.end_time.is_none() {
                 let message = format!("project {} is being tracked", period.project);
                 eprintln!("Error: {}",  message.red());
@@ -114,15 +112,14 @@ fn start(project_name: &str) {
         }
     } 
     let current_period = create_period(project_name);
-    // store current period in file
     print!("Started tracking project {} at {}", current_period.project.blue(), humanize_time(current_period.start_time));
     periods.push(current_period);
-    save_periods(periods.to_vec());
+    save_periods(periods);
 }
 
 fn status() {
-    let mut periods = get_periods();
-    if let Some(period) = periods.pop() {
+    let periods = get_periods();
+    if let Some(period) = periods.last() {
         if period.end_time.is_none() {
             let diff = Utc::now().signed_duration_since(period.start_time);
             return println!("Project {} started {} ({})", period.project.magenta(), humanize_duration(diff), humanize_datetime(period.start_time).blue());
@@ -133,23 +130,16 @@ fn status() {
 
 fn stop() {
     let mut periods = get_periods();
-    let mut updated_period = false;
-    let last_index = periods.len() - 1;
-    if periods.len() > 0 {
-        if let Some(period) = periods.get_mut(last_index) {
-            if period.end_time.is_none() {
-                period.end_time = Some(Utc::now());
-                updated_period = true;
-                let diff = Utc::now().signed_duration_since(period.start_time);
-                println!("Stopped project {}, started {}", period.project.blue(), humanize_duration(diff));
-            }
+    if let Some(mut period) = periods.pop() {
+        if period.end_time.is_none() {
+            period.end_time = Some(Utc::now());
+            let diff = Utc::now().signed_duration_since(period.start_time);
+            println!("Stopped project {}, started {}", period.project.blue(), humanize_duration(diff));
+            periods.push(period);
+            return save_periods(periods);
         }
     }
-    if updated_period {
-        save_periods(periods);
-    } else {
-        eprintln!("Error: {}", "No project started.".red());
-    }
+    eprintln!("Error: {}", "No project started.".red());
 }
 
 fn cancel() {
@@ -158,8 +148,7 @@ fn cancel() {
         if period.end_time.is_none() {
             save_periods(periods);
             let diff = Utc::now().signed_duration_since(period.start_time);
-            println!("Canceled project {}, started {}", period.project.blue(), humanize_duration(diff));
-            return
+            return println!("Canceled project {}, started {}", period.project.blue(), humanize_duration(diff));
         }
     }
     eprintln!("Error: {}", "No project started".red());
@@ -189,14 +178,18 @@ fn log() {
     let mut project_periods = Vec::new();
     let mut max_diff_len = 0;
 
+    // organize periods by day
     for period in periods.iter() {
         let time = period.start_time.with_timezone(&Local).date();
         days.entry(time).or_insert(Vec::new()).push(period.clone());
     }
+    // count the total time tracker per day
     for (date, day) in days.iter() {
         let d = day.into_iter().fold(Duration::zero(), |acc, ref x| acc + (x.end_time.unwrap_or(Utc::now()).signed_duration_since(x.start_time)));
         println!("{date} ({duration})", date=date.with_timezone(&Local).format("%A %-d %B %Y").to_string().green(), duration=format_duration(d).bold());
+        // find time tracker per period
         for period in day.iter() {
+            // push periods onto vector so we can could there lengths and properly align them
             match period.end_time {
                 Some(end_time) => {
                     let diff = end_time.signed_duration_since(period.start_time);
@@ -234,23 +227,29 @@ fn report() {
     let mut max_proj_len = 0;
     let mut max_diff_len = 0;
 
+    // organize periods by project
     for period in periods.iter() {
         days.entry(period.project.clone()).or_insert(Vec::new()).push(period.clone());
     }
+    // 
     for (project, intervals) in days.iter() {
-        let diff = intervals.into_iter().fold(Duration::zero(), |acc, ref x| acc + (x.end_time.unwrap_or(Utc::now()).signed_duration_since(x.start_time)));
+        // sum total time per project
+        let duration = intervals.into_iter().fold(Duration::zero(), |acc, ref x| acc + (x.end_time.unwrap_or(Utc::now()).signed_duration_since(x.start_time)));
+        // determine start date of report period
         for x in intervals.iter() {
             if x.start_time.with_timezone(&Local).date() < start_date {
                 start_date = x.start_time.with_timezone(&Local).date();
             }
         }
+        // find lengths of project names for alignment
         if project.to_string().len() > max_proj_len {
             max_proj_len = project.to_string().len();
         }
-        if format_duration(diff).len() > max_diff_len {
-            max_diff_len = format_duration(diff).len();
+        // find lengths of durations names for alignment
+        if format_duration(duration).len() > max_diff_len {
+            max_diff_len = format_duration(duration).len();
         }
-        results.push((project.clone(), diff));
+        results.push((project.clone(), duration));
     }
     println!("{start} -> {end}",
         start=start_date.format("%A %-d %B %Y").to_string().blue(),
@@ -272,8 +271,7 @@ fn amend(project_name: &str) {
             period.project = String::from(project_name);
             println!("Renamed tracking project {old} -> {new}", old=old_name.red(), new=period.project.green());
             periods.push(period);
-            save_periods(periods);
-            return
+            return save_periods(periods);
         }
     }
     eprintln!("Error: {}", "No project started".red());
@@ -281,7 +279,9 @@ fn amend(project_name: &str) {
 
 
 fn edit() {
-    let path = get_data_file_path();
+    let path = Path::new(&env::var("HOME")
+        .expect("Failed to find home directory from environment 'HOME'"))
+        .join(".doug/periods.json");
     println!("File: {}", path.to_str().unwrap().blue());
     if let Some(editor) = env::var_os("EDITOR") {
         let mut edit = Command::new(editor);
@@ -314,28 +314,28 @@ fn humanize_time(time: DateTime<Utc>) -> String {
     time.with_timezone(&Local).format("%H:%M").to_string()
 }
 
-fn format_duration(duration: Duration) -> String{
+fn format_duration(duration: Duration) -> String {
     let days = duration.num_days();
-    let hours = duration.num_hours();
-    let minutes = duration.num_minutes();
-    let seconds = duration.num_seconds();
+    let hours = duration.num_hours() % 24;
+    let minutes = duration.num_minutes() % 60;
+    let seconds = duration.num_seconds() % 60;
     if minutes == 0 {
         return format!("{}s", seconds)
     } else if hours == 0 {
         return format!("{minutes}m {seconds}s",
             minutes=minutes,
-            seconds=seconds % 60)
+            seconds=seconds)
     } else if days == 0 {
         return format!("{hours}h {minutes}m {seconds}s",
             hours=hours,
-            minutes=minutes % 60,
-            seconds=seconds % 60)
+            minutes=minutes,
+            seconds=seconds)
     } else {
         return format!("{days}d {hours}h {minutes}m {seconds}s",
             days=days,
-            hours=hours % 24,
-            minutes=minutes % 60,
-            seconds=seconds % 60)
+            hours=hours,
+            minutes=minutes,
+            seconds=seconds)
     }
 }
 
@@ -367,63 +367,38 @@ fn create_period(project: &str) -> Period {
     }
 }
 
-fn get_data_folder() -> PathBuf {
+fn get_periods() -> Vec<Period> {
     let home_dir = env::var("HOME").expect("Failed to find home directory from environment 'HOME'");
-    let mut data_folder = PathBuf::from(home_dir);
-    data_folder.push(".doug");
-    data_folder
-}
-
-fn get_data_file_path() -> PathBuf {
-    let data_folder = get_data_folder();
-    let mut data_file = PathBuf::from(&data_folder);
-    data_file.push("periods.json");
-    data_file
-}
-
-fn get_data_back_file_path() -> PathBuf {
-    let data_file = get_data_file_path();
-    data_file.with_extension("json-backup")
-}
-
-fn get_data_file() -> (File, Metadata) {
-    let data_file = get_data_file_path();
-    (OpenOptions::new()
+    let mut folder = PathBuf::from(home_dir);
+    folder.push(".doug");
+    // create .doug directory
+    DirBuilder::new()
+        .recursive(true)
+        .create(&folder).expect("Couldn't create data directory");
+    // create data file
+    let data_file_path = folder.as_path().join("periods.json");
+    let data_file = OpenOptions::new()
         .create(true)
         .read(true)
         .write(true)
-        .open(&data_file)
-        .expect(&format!("Couldn't open datafile: {:?}", data_file)),
-    fs::metadata(&data_file).expect("Couldn't access datafile metadata")
-    )
-}
-
-
-fn get_periods() -> Vec<Period> {
-    let data_folder = get_data_folder();
-
-    match fs::create_dir(&data_folder) {
-        Err(ref error) if error.kind() == ErrorKind::AlreadyExists => {},
-        Err(error) => panic!("There was a problem creating the data directory: {:?}", error),
-        Ok(_) => {},
-    }
-
-    let (file, metadata) = get_data_file();
-
-    let periods: Result<Vec<Period>, Error> = serde_json::from_reader(file);
-    let periods = match periods {
+        .open(&data_file_path)
+        .expect(&format!("Couldn't open datafile: {:?}", data_file_path));
+    // serialize periods from data file
+    let periods: Result<Vec<Period>, Error> = serde_json::from_reader(data_file);
+    match periods {
         Ok(p) => p,
-        Err(_) if metadata.len() > 0 => Vec::new(),
         Err(ref error) if error.is_eof() => Vec::new(),
         Err(error) => panic!("There was a serialization issue: {:?}", error),
-    };
-    periods
+    }
 }
 
 fn save_periods(periods: Vec<Period>) {
     let serialized = serde_json::to_string(&periods).expect("Couldn't serialize data to string");
-    let data_file = get_data_file_path();
-    let data_file_backup = get_data_back_file_path();
+    let data_file = Path::new(&env::var("HOME")
+        .expect("Failed to find home directory from environment 'HOME'"))
+        .join(".doug/periods.json");
+    let mut data_file_backup = data_file.clone();
+    data_file_backup.set_extension("json-backup");
     fs::copy(&data_file, &data_file_backup).expect("Couldn't create backup file");
     let mut file = OpenOptions::new()
                     .create(true)
