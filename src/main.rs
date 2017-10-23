@@ -71,37 +71,38 @@ fn main() {
                 .required(true)))
         .get_matches();
 
+    let time_periods = get_periods();
+
     if let Some(matches) = matches.subcommand_matches("start") {
         if matches.is_present("project") {
-            start(matches.value_of("project").unwrap());
+            start(matches.value_of("project").unwrap(), time_periods.clone(), save_periods);
         }
     }
 
     if let Some(matches) = matches.subcommand_matches("amend") {
         if matches.is_present("project") {
-            amend(matches.value_of("project").expect("missing project name"));
+            amend(matches.value_of("project").expect("missing project name"), time_periods.clone(), save_periods);
         }
     }
 
     if let Some(matches) = matches.subcommand_matches("delete") {
-        delete(matches.value_of("project").expect("missing project name"));
+        delete(matches.value_of("project").expect("missing project name"), time_periods.clone(), save_periods);
     }
 
     match matches.subcommand_name() {
-        Some("status") => status(),
-        Some("stop") => stop(),
-        Some("cancel") => cancel(),
-        Some("restart") => restart(),
-        Some("log") => log(),
-        Some("report") => report(),
+        Some("status") => status(time_periods),
+        Some("stop") => stop(time_periods, save_periods),
+        Some("cancel") => cancel(time_periods, save_periods),
+        Some("restart") => restart(time_periods, save_periods),
+        Some("log") => log(time_periods),
+        Some("report") => report(time_periods),
         Some("edit") => edit(),
         _ => {},
     }
 }
 
 
-fn start(project_name: &str) {
-    let mut periods = get_periods();
+fn start(project_name: &str, mut periods: Vec<Period>, save: fn(Vec<Period>)) {
     if !periods.is_empty() {
         if let Some(period) = periods.last_mut() {
             if period.end_time.is_none() {
@@ -114,11 +115,10 @@ fn start(project_name: &str) {
     let current_period = create_period(project_name);
     print!("Started tracking project {} at {}", current_period.project.blue(), humanize_time(current_period.start_time));
     periods.push(current_period);
-    save_periods(periods);
+    save(periods);
 }
 
-fn status() {
-    let periods = get_periods();
+fn status(periods: Vec<Period>) {
     if let Some(period) = periods.last() {
         if period.end_time.is_none() {
             let diff = Utc::now().signed_duration_since(period.start_time);
@@ -128,25 +128,23 @@ fn status() {
     eprintln!("No running project");
 }
 
-fn stop() {
-    let mut periods = get_periods();
+fn stop(mut periods: Vec<Period>, save: fn(Vec<Period>)) {
     if let Some(mut period) = periods.pop() {
         if period.end_time.is_none() {
             period.end_time = Some(Utc::now());
             let diff = Utc::now().signed_duration_since(period.start_time);
             println!("Stopped project {}, started {}", period.project.blue(), humanize_duration(diff));
             periods.push(period);
-            return save_periods(periods);
+            return save(periods);
         }
     }
     eprintln!("Error: {}", "No project started.".red());
 }
 
-fn cancel() {
-    let mut periods = get_periods();
+fn cancel(mut periods: Vec<Period>, save: fn(Vec<Period>)) {
     if let Some(period) = periods.pop() {
         if period.end_time.is_none() {
-            save_periods(periods);
+            save(periods);
             let diff = Utc::now().signed_duration_since(period.start_time);
             return println!("Canceled project {}, started {}", period.project.blue(), humanize_duration(diff));
         }
@@ -154,14 +152,13 @@ fn cancel() {
     eprintln!("Error: {}", "No project started".red());
 }
 
-fn restart() {
-    let periods = get_periods();
+fn restart(periods: Vec<Period>, save: fn(Vec<Period>)) {
     let mut new_periods = periods.to_vec();
     if let Some(period) = periods.last() {
         if !period.end_time.is_none() {
             let new_period = create_period(&period.project);
             new_periods.push(new_period);
-            save_periods(new_periods);
+            save(new_periods);
             return println!("Tracking last running project: {}", period.project.blue());
         } else {
             let message = format!("No project to restart. Project {} is being tracked", period.project);
@@ -172,8 +169,7 @@ fn restart() {
     eprintln!("Error: {}", "No previous project to restart".red());
 }
 
-fn log() {
-    let periods = get_periods();
+fn log(periods: Vec<Period>) {
     let mut days: HashMap<Date<chrono::Local>, Vec<Period>> = HashMap::new();
     let mut project_periods = Vec::new();
     let mut max_diff_len = 0;
@@ -219,8 +215,7 @@ fn log() {
     }
 }
 
-fn report() {
-    let periods = get_periods();
+fn report(periods: Vec<Period>) {
     let mut days: HashMap<String, Vec<Period>> = HashMap::new();
     let mut start_date = Utc::now().with_timezone(&Local).date();
     let mut results: Vec<(String, Duration)> = Vec::new();
@@ -263,15 +258,14 @@ fn report() {
     }
 }
 
-fn amend(project_name: &str) {
-    let mut periods = get_periods();
+fn amend(project_name: &str, mut periods: Vec<Period>, save: fn(Vec<Period>)) {
     if let Some(mut period) = periods.pop() {
         if period.end_time.is_none() {
             let old_name = period.project.clone();
             period.project = String::from(project_name);
             println!("Renamed tracking project {old} -> {new}", old=old_name.red(), new=period.project.green());
             periods.push(period);
-            return save_periods(periods);
+            return save(periods);
         }
     }
     eprintln!("Error: {}", "No project started".red());
@@ -295,13 +289,12 @@ fn edit() {
     }
 }
 
-fn delete(project_name: &str) {
-    let periods = get_periods();
+fn delete(project_name: &str, periods: Vec<Period>, save: fn(Vec<Period>)) {
     let filtered_periods = periods.clone().into_iter().filter(|x| x.project != project_name).collect();
     if filtered_periods == periods {
         eprintln!("Error: {}", "Project not found.".red());
     } else {
-        save_periods(filtered_periods);
+        save(filtered_periods);
         println!("Deleted project {project}", project=project_name.blue());
     }
 }
