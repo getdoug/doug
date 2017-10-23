@@ -313,18 +313,18 @@ fn format_duration(duration: Duration) -> String {
     let minutes = duration.num_minutes() % 60;
     let seconds = duration.num_seconds() % 60;
     if minutes == 0 {
-        return format!("{}s", seconds)
+        format!("{}s", seconds)
     } else if hours == 0 {
-        return format!("{minutes}m {seconds}s",
+        format!("{minutes}m {seconds}s",
             minutes=minutes,
             seconds=seconds)
     } else if days == 0 {
-        return format!("{hours}h {minutes}m {seconds}s",
+        format!("{hours}h {minutes}m {seconds}s",
             hours=hours,
             minutes=minutes,
             seconds=seconds)
     } else {
-        return format!("{days}d {hours}h {minutes}m {seconds}s",
+        format!("{days}d {hours}h {minutes}m {seconds}s",
             days=days,
             hours=hours,
             minutes=minutes,
@@ -338,17 +338,18 @@ fn humanize_duration(time: Duration) -> String {
     let seconds = time.num_seconds();
     if minutes == 0 {
         if seconds < 5 {
-            return String::from("just now")
+            String::from("just now")
+        } else {
+            String::from("seconds ago")
         }
-        return String::from("seconds ago")
     } else if hours == 0 {
         if minutes == 1 {
-            return format!("{minutes} minute ago", minutes=minutes)
+            format!("{minutes} minute ago", minutes=minutes)
         } else {
-            return format!("{minutes} minutes ago", minutes=minutes)
+            format!("{minutes} minutes ago", minutes=minutes)
         }
     } else {
-        return format!("{hours}:{minutes}", hours=hours, minutes=minutes)
+        format!("{hours}:{minutes}", hours=hours, minutes=minutes)
     }
 }
 
