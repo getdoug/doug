@@ -5,6 +5,12 @@
 
 To have a time tracker that's not inhibited by [slow language startup times][0].
 
+## Install
+
+```
+cargo install doug
+```
+
 ## Usage
 ```
 USAGE:
