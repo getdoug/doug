@@ -1,5 +1,9 @@
 [package]
 name = "doug"
+description = "A time tracking command-line utility"
+repository = "https://github.com/chdsbd/doug"
+documentation = "https://github.com/chdsbd/doug/blob/master/README.md"
+license = "MIT"
 version = "0.1.0"
 authors = ["Christopher Dignam <chris@dignam.xyz>"]
 
