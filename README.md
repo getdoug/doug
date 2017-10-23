@@ -1,4 +1,4 @@
-# Doug
+# Doug ![cargo-badge](https://img.shields.io/crates/v/doug.svg)
 > A time tracking command-line utility
 
 ## Why?
