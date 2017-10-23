@@ -7,6 +7,14 @@ To have a time tracker that's not inhibited by [slow language startup times][0].
 
 ## Install
 
+[brew][1]
+
+```
+brew install getdoug/doug/doug
+```
+
+[cargo][2]
+
 ```
 cargo install doug
 ```
@@ -153,3 +161,5 @@ ARGS:
 - <https://github.com/samg/timetrap>
 
 [0]: https://mail.python.org/pipermail/python-dev/2017-July/148656.html
+[1]: https://brew.sh
+[2]: http://doc.crates.io
