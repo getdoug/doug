@@ -228,16 +228,18 @@ fn log(periods: Vec<Period>) {
     let mut max_diff_len = 0;
 
     // organize periods by day
-    for period in periods.iter() {
+    for period in &periods {
         let time = period.start_time.with_timezone(&Local).date();
-        days.entry(time).or_insert(Vec::new()).push(period.clone());
+        days.entry(time)
+            .or_insert_with(Vec::new)
+            .push(period.clone());
     }
     // count the total time tracker per day
-    for (date, day) in days.iter() {
-        let d = day.into_iter().fold(Duration::zero(), |acc, ref x| {
+    for (date, day) in &days {
+        let d = day.into_iter().fold(Duration::zero(), |acc, x| {
             acc
                 + (x.end_time
-                    .unwrap_or(Utc::now())
+                    .unwrap_or_else(Utc::now)
                     .signed_duration_since(x.start_time))
         });
         println!(
@@ -275,7 +277,7 @@ fn log(periods: Vec<Period>) {
             }
         }
         project_periods.sort();
-        for &(start, end, diff, ref project) in project_periods.iter() {
+        for &(start, end, diff, ref project) in &project_periods {
             println!(
                 "    {start} to {end} {diff:>width$} {project}",
                 start = humanize_time(start),
@@ -296,18 +298,18 @@ fn report(periods: Vec<Period>) {
     let mut max_diff_len = 0;
 
     // organize periods by project
-    for period in periods.iter() {
+    for period in &periods {
         days.entry(period.project.clone())
-            .or_insert(Vec::new())
+            .or_insert_with(Vec::new)
             .push(period.clone());
     }
     //
-    for (project, intervals) in days.iter() {
+    for (project, intervals) in &days {
         // sum total time per project
-        let duration = intervals.into_iter().fold(Duration::zero(), |acc, ref x| {
+        let duration = intervals.into_iter().fold(Duration::zero(), |acc, x| {
             acc
                 + (x.end_time
-                    .unwrap_or(Utc::now())
+                    .unwrap_or_else(Utc::now)
                     .signed_duration_since(x.start_time))
         });
         // determine start date of report period
@@ -332,11 +334,11 @@ fn report(periods: Vec<Period>) {
         end = Utc::now().format("%A %-d %B %Y").to_string().blue()
     );
     results.sort();
-    for &(ref project, ref duration) in results.iter() {
+    for &(ref project, ref duration) in &results {
         println!(
             "{project:pwidth$} {duration:>dwidth$}",
             project = project.green(),
-            duration = format_duration(duration.clone()).bold(),
+            duration = format_duration(*duration).bold(),
             pwidth = max_proj_len,
             dwidth = max_diff_len
         );
