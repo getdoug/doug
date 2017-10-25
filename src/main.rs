@@ -33,13 +33,15 @@ fn main() {
         .version(crate_version!())
         .about("A time tracking command-line utility")
         .author(crate_authors!())
-        .settings(&[
-            AppSettings::DeriveDisplayOrder,
-            AppSettings::GlobalVersion,
-            AppSettings::SubcommandRequiredElseHelp,
-            AppSettings::VersionlessSubcommands,
-            AppSettings::DisableHelpSubcommand,
-        ])
+        .settings(
+            &[
+                AppSettings::DeriveDisplayOrder,
+                AppSettings::GlobalVersion,
+                AppSettings::SubcommandRequiredElseHelp,
+                AppSettings::VersionlessSubcommands,
+                AppSettings::DisableHelpSubcommand,
+            ],
+        )
         .subcommand(
             SubCommand::with_name("start")
                 .about("Track new or existing project")
@@ -49,20 +51,24 @@ fn main() {
                         .required(true),
                 ),
         )
-        .subcommand(
-            SubCommand::with_name("status")
-                .about("Display elapsed time, start time, and running project name"),
-        )
-        .subcommand(SubCommand::with_name("stop").about("Stop any running projects"))
-        .subcommand(
-            SubCommand::with_name("cancel")
-                .about("Stop running project and remove most recent time interval"),
-        )
-        .subcommand(SubCommand::with_name("restart").about("Track last running project"))
-        .subcommand(
-            SubCommand::with_name("log").about("Display time intervals across all projects"),
-        )
-        .subcommand(SubCommand::with_name("report").about("Display aggregate time from projects"))
+        .subcommand(SubCommand::with_name("status").about(
+            "Display elapsed time, start time, and running project name",
+        ))
+        .subcommand(SubCommand::with_name("stop").about(
+            "Stop any running projects",
+        ))
+        .subcommand(SubCommand::with_name("cancel").about(
+            "Stop running project and remove most recent time interval",
+        ))
+        .subcommand(SubCommand::with_name("restart").about(
+            "Track last running project",
+        ))
+        .subcommand(SubCommand::with_name("log").about(
+            "Display time intervals across all projects",
+        ))
+        .subcommand(SubCommand::with_name("report").about(
+            "Display aggregate time from projects",
+        ))
         .subcommand(
             SubCommand::with_name("amend")
                 .about("Change name of currently running project")
@@ -72,9 +78,9 @@ fn main() {
                         .required(true),
                 ),
         )
-        .subcommand(
-            SubCommand::with_name("edit").about("Edit last frame or currently running frame"),
-        )
+        .subcommand(SubCommand::with_name("edit").about(
+            "Edit last frame or currently running frame",
+        ))
         .subcommand(
             SubCommand::with_name("delete")
                 .about("Delete all intervals for project")
@@ -230,17 +236,17 @@ fn log(periods: &[Period]) {
     // organize periods by day
     for period in periods {
         let time = period.start_time.with_timezone(&Local).date();
-        days.entry(time)
-            .or_insert_with(Vec::new)
-            .push(period.clone());
+        days.entry(time).or_insert_with(Vec::new).push(
+            period.clone(),
+        );
     }
     // count the total time tracker per day
     for (date, day) in &days {
         let d = day.into_iter().fold(Duration::zero(), |acc, x| {
-            acc
-                + (x.end_time
-                    .unwrap_or_else(Utc::now)
-                    .signed_duration_since(x.start_time))
+            acc +
+                (x.end_time.unwrap_or_else(Utc::now).signed_duration_since(
+                    x.start_time,
+                ))
         });
         println!(
             "{date} ({duration})",
@@ -256,8 +262,12 @@ fn log(periods: &[Period]) {
             match period.end_time {
                 Some(end_time) => {
                     let diff = end_time.signed_duration_since(period.start_time);
-                    project_periods
-                        .push((period.start_time, end_time, diff, period.project.clone()));
+                    project_periods.push((
+                        period.start_time,
+                        end_time,
+                        diff,
+                        period.project.clone(),
+                    ));
                     if format_duration(diff).len() > max_diff_len {
                         max_diff_len = format_duration(diff).len()
                     }
@@ -307,10 +317,10 @@ fn report(periods: &[Period]) {
     for (project, intervals) in &days {
         // sum total time per project
         let duration = intervals.into_iter().fold(Duration::zero(), |acc, x| {
-            acc
-                + (x.end_time
-                    .unwrap_or_else(Utc::now)
-                    .signed_duration_since(x.start_time))
+            acc +
+                (x.end_time.unwrap_or_else(Utc::now).signed_duration_since(
+                    x.start_time,
+                ))
         });
         // determine start date of report period
         for x in intervals.iter() {
@@ -364,11 +374,9 @@ fn amend(project_name: &str, mut periods: Vec<Period>, save: fn(&[Period])) {
 
 
 fn edit() {
-    let path = Path::new(&env::var("HOME")
-        .expect("Failed to find home directory from environment 'HOME'"))
-        .join(
-        ".doug/periods.json",
-    );
+    let path = Path::new(&env::var("HOME").expect(
+        "Failed to find home directory from environment 'HOME'",
+    )).join(".doug/periods.json");
     println!("File: {}", path.to_str().unwrap().blue());
     if let Some(editor) = env::var_os("EDITOR") {
         let mut edit = Command::new(editor);
@@ -473,10 +481,9 @@ fn periods() -> Vec<Period> {
     let mut folder = PathBuf::from(home_dir);
     folder.push(".doug");
     // create .doug directory
-    DirBuilder::new()
-        .recursive(true)
-        .create(&folder)
-        .expect("Couldn't create data directory");
+    DirBuilder::new().recursive(true).create(&folder).expect(
+        "Couldn't create data directory",
+    );
     // create data file
     let data_file_path = folder.as_path().join("periods.json");
     let data_file = OpenOptions::new()
@@ -496,11 +503,9 @@ fn periods() -> Vec<Period> {
 
 fn save_periods(periods: &[Period]) {
     let serialized = serde_json::to_string(&periods).expect("Couldn't serialize data to string");
-    let data_file = Path::new(&env::var("HOME")
-        .expect("Failed to find home directory from environment 'HOME'"))
-        .join(
-        ".doug/periods.json",
-    );
+    let data_file = Path::new(&env::var("HOME").expect(
+        "Failed to find home directory from environment 'HOME'",
+    )).join(".doug/periods.json");
     let mut data_file_backup = data_file.clone();
     data_file_backup.set_extension("json-backup");
     fs::copy(&data_file, &data_file_backup).expect("Couldn't create backup file");
@@ -511,6 +516,7 @@ fn save_periods(periods: &[Period]) {
         .open(&data_file)
         .expect("Couldn't open file for saving period.");
 
-    file.write_all(serialized.as_bytes())
-        .expect("Couldn't write serialized data to file");
+    file.write_all(serialized.as_bytes()).expect(
+        "Couldn't write serialized data to file",
+    );
 }
