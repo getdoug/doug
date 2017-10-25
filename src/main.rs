@@ -111,25 +111,25 @@ fn main() {
     if let Some(matches) = matches.subcommand_matches("delete") {
         delete(
             matches.value_of("project").expect("missing project name"),
-            time_periods.clone(),
+            &time_periods.clone(),
             save_periods,
         );
     }
 
     match matches.subcommand_name() {
-        Some("status") => status(time_periods),
+        Some("status") => status(&time_periods),
         Some("stop") => stop(time_periods, save_periods),
         Some("cancel") => cancel(time_periods, save_periods),
-        Some("restart") => restart(time_periods, save_periods),
-        Some("log") => log(time_periods),
-        Some("report") => report(time_periods),
+        Some("restart") => restart(&time_periods, save_periods),
+        Some("log") => log(&time_periods),
+        Some("report") => report(&time_periods),
         Some("edit") => edit(),
         _ => {}
     }
 }
 
 
-fn start(project_name: &str, mut periods: Vec<Period>, save: fn(Vec<Period>)) {
+fn start(project_name: &str, mut periods: Vec<Period>, save: fn(&[Period])) {
     if !periods.is_empty() {
         if let Some(period) = periods.last_mut() {
             if period.end_time.is_none() {
@@ -149,10 +149,10 @@ fn start(project_name: &str, mut periods: Vec<Period>, save: fn(Vec<Period>)) {
         humanize_time(current_period.start_time)
     );
     periods.push(current_period);
-    save(periods);
+    save(&periods.to_vec());
 }
 
-fn status(periods: Vec<Period>) {
+fn status(periods: &[Period]) {
     if let Some(period) = periods.last() {
         if period.end_time.is_none() {
             let diff = Utc::now().signed_duration_since(period.start_time);
@@ -167,7 +167,7 @@ fn status(periods: Vec<Period>) {
     eprintln!("No running project");
 }
 
-fn stop(mut periods: Vec<Period>, save: fn(Vec<Period>)) {
+fn stop(mut periods: Vec<Period>, save: fn(&[Period])) {
     if let Some(mut period) = periods.pop() {
         if period.end_time.is_none() {
             period.end_time = Some(Utc::now());
@@ -178,16 +178,16 @@ fn stop(mut periods: Vec<Period>, save: fn(Vec<Period>)) {
                 humanize_duration(diff)
             );
             periods.push(period);
-            return save(periods);
+            return save(&periods.to_vec());
         }
     }
     eprintln!("Error: {}", "No project started.".red());
 }
 
-fn cancel(mut periods: Vec<Period>, save: fn(Vec<Period>)) {
+fn cancel(mut periods: Vec<Period>, save: fn(&[Period])) {
     if let Some(period) = periods.pop() {
         if period.end_time.is_none() {
-            save(periods);
+            save(&periods.to_vec());
             let diff = Utc::now().signed_duration_since(period.start_time);
             return println!(
                 "Canceled project {}, started {}",
@@ -199,13 +199,13 @@ fn cancel(mut periods: Vec<Period>, save: fn(Vec<Period>)) {
     eprintln!("Error: {}", "No project started".red());
 }
 
-fn restart(periods: Vec<Period>, save: fn(Vec<Period>)) {
+fn restart(periods: &[Period], save: fn(&[Period])) {
     let mut new_periods = periods.to_vec();
     if let Some(period) = periods.last() {
         if !period.end_time.is_none() {
             let new_period = create_period(&period.project);
             new_periods.push(new_period);
-            save(new_periods);
+            save(&new_periods.to_vec());
             return println!("Tracking last running project: {}", period.project.blue());
         } else {
             let message = format!(
@@ -222,13 +222,13 @@ fn restart(periods: Vec<Period>, save: fn(Vec<Period>)) {
     eprintln!("Error: {}", "No previous project to restart".red());
 }
 
-fn log(periods: Vec<Period>) {
+fn log(periods: &[Period]) {
     let mut days: HashMap<Date<chrono::Local>, Vec<Period>> = HashMap::new();
     let mut project_periods = Vec::new();
     let mut max_diff_len = 0;
 
     // organize periods by day
-    for period in &periods {
+    for period in periods {
         let time = period.start_time.with_timezone(&Local).date();
         days.entry(time)
             .or_insert_with(Vec::new)
@@ -290,7 +290,7 @@ fn log(periods: Vec<Period>) {
     }
 }
 
-fn report(periods: Vec<Period>) {
+fn report(periods: &[Period]) {
     let mut days: HashMap<String, Vec<Period>> = HashMap::new();
     let mut start_date = Utc::now().with_timezone(&Local).date();
     let mut results: Vec<(String, Duration)> = Vec::new();
@@ -298,7 +298,7 @@ fn report(periods: Vec<Period>) {
     let mut max_diff_len = 0;
 
     // organize periods by project
-    for period in &periods {
+    for period in periods {
         days.entry(period.project.clone())
             .or_insert_with(Vec::new)
             .push(period.clone());
@@ -345,7 +345,7 @@ fn report(periods: Vec<Period>) {
     }
 }
 
-fn amend(project_name: &str, mut periods: Vec<Period>, save: fn(Vec<Period>)) {
+fn amend(project_name: &str, mut periods: Vec<Period>, save: fn(&[Period])) {
     if let Some(mut period) = periods.pop() {
         if period.end_time.is_none() {
             let old_name = period.project.clone();
@@ -356,7 +356,7 @@ fn amend(project_name: &str, mut periods: Vec<Period>, save: fn(Vec<Period>)) {
                 new = period.project.green()
             );
             periods.push(period);
-            return save(periods);
+            return save(&periods.to_vec());
         }
     }
     eprintln!("Error: {}", "No project started".red());
@@ -382,16 +382,20 @@ fn edit() {
     }
 }
 
-fn delete(project_name: &str, periods: Vec<Period>, save: fn(Vec<Period>)) {
-    let filtered_periods = periods
-        .clone()
-        .into_iter()
-        .filter(|x| x.project != project_name)
-        .collect();
-    if filtered_periods == periods {
+fn delete(project_name: &str, periods: &[Period], save: fn(&[Period])) {
+    let mut project_not_found = true;
+    let mut filtered_periods = Vec::new();
+    for period in periods {
+        if period.project == project_name {
+            project_not_found = false;
+        } else {
+            filtered_periods.push(period.clone());
+        }
+    }
+    if project_not_found {
         eprintln!("Error: {}", "Project not found.".red());
     } else {
-        save(filtered_periods);
+        save(&filtered_periods);
         println!("Deleted project {project}", project = project_name.blue());
     }
 }
@@ -490,7 +494,7 @@ fn periods() -> Vec<Period> {
     }
 }
 
-fn save_periods(periods: Vec<Period>) {
+fn save_periods(periods: &[Period]) {
     let serialized = serde_json::to_string(&periods).expect("Couldn't serialize data to string");
     let data_file = Path::new(&env::var("HOME")
         .expect("Failed to find home directory from environment 'HOME'"))
