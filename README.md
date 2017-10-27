@@ -59,10 +59,11 @@ ARGS:
 Display elapsed time, start time, and running project name
 
 USAGE:
-    doug status
+    doug status [FLAGS]
 
 FLAGS:
-    -h, --help    Prints help information
+    -h, --help      Prints help information
+    -s, --simple    Print running project name or nothing if there isn't a running project.
 ```
 ### stop
 ```
