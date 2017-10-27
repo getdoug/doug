@@ -51,9 +51,13 @@ fn main() {
                         .required(true),
                 ),
         )
-        .subcommand(SubCommand::with_name("status").about(
-            "Display elapsed time, start time, and running project name",
-        ))
+        .subcommand(
+            SubCommand::with_name("status")
+                .about("Display elapsed time, start time, and running project name")
+                .arg(Arg::with_name("s").short("s").long("simple").help(
+                    "Print running project name or nothing if there isn't a running project.",
+                )),
+        )
         .subcommand(SubCommand::with_name("stop").about(
             "Stop any running projects",
         ))
@@ -122,8 +126,11 @@ fn main() {
         );
     }
 
+    if let Some(matches) = matches.subcommand_matches("status") {
+        status(&time_periods, matches.is_present("s"));
+    }
+
     match matches.subcommand_name() {
-        Some("status") => status(&time_periods),
         Some("stop") => stop(time_periods, save_periods),
         Some("cancel") => cancel(time_periods, save_periods),
         Some("restart") => restart(&time_periods, save_periods),
@@ -158,19 +165,25 @@ fn start(project_name: &str, mut periods: Vec<Period>, save: fn(&[Period])) {
     save(&periods.to_vec());
 }
 
-fn status(periods: &[Period]) {
+fn status(periods: &[Period], simple: bool) {
     if let Some(period) = periods.last() {
         if period.end_time.is_none() {
             let diff = Utc::now().signed_duration_since(period.start_time);
-            return println!(
-                "Project {} started {} ({})",
-                period.project.magenta(),
-                humanize_duration(diff),
-                humanize_datetime(period.start_time).blue()
-            );
+            if simple {
+                return println!("{}", period.project);
+            } else {
+                return println!(
+                    "Project {} started {} ({})",
+                    period.project.magenta(),
+                    humanize_duration(diff),
+                    humanize_datetime(period.start_time).blue()
+                );
+            }
         }
     }
-    eprintln!("No running project");
+    if !simple {
+        eprintln!("No running project");
+    }
 }
 
 fn stop(mut periods: Vec<Period>, save: fn(&[Period])) {
@@ -449,8 +462,8 @@ fn format_duration(duration: Duration) -> String {
 
 fn humanize_duration(time: Duration) -> String {
     let hours = time.num_hours();
-    let minutes = time.num_minutes();
-    let seconds = time.num_seconds();
+    let minutes = time.num_minutes() % 60;
+    let seconds = time.num_seconds() % 60;
     if minutes == 0 {
         if seconds < 5 {
             String::from("just now")
