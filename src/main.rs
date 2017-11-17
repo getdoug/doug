@@ -159,7 +159,7 @@ fn start(project_name: &str, mut periods: Vec<Period>, save: fn(&[Period])) {
     print!(
         "Started tracking project {} at {}",
         current_period.project.blue(),
-        humanize_time(current_period.start_time)
+        format_time(current_period.start_time)
     );
     periods.push(current_period);
     save(&periods.to_vec());
@@ -173,10 +173,10 @@ fn status(periods: &[Period], simple: bool) {
                 return println!("{}", period.project);
             } else {
                 return println!(
-                    "Project {} started {} ({})",
+                    "Project {} started {} ago ({})",
                     period.project.magenta(),
-                    humanize_duration(diff),
-                    humanize_datetime(period.start_time).blue()
+                    format_duration(diff),
+                    format_datetime(period.start_time).blue()
                 );
             }
         }
@@ -192,9 +192,9 @@ fn stop(mut periods: Vec<Period>, save: fn(&[Period])) {
             period.end_time = Some(Utc::now());
             let diff = Utc::now().signed_duration_since(period.start_time);
             println!(
-                "Stopped project {}, started {}",
+                "Stopped project {}, started {} ago",
                 period.project.blue(),
-                humanize_duration(diff)
+                format_duration(diff)
             );
             periods.push(period);
             return save(&periods.to_vec());
@@ -209,9 +209,9 @@ fn cancel(mut periods: Vec<Period>, save: fn(&[Period])) {
             save(&periods.to_vec());
             let diff = Utc::now().signed_duration_since(period.start_time);
             return println!(
-                "Canceled project {}, started {}",
+                "Canceled project {}, started {} ago",
                 period.project.blue(),
-                humanize_duration(diff)
+                format_duration(diff)
             );
         }
     }
@@ -303,8 +303,8 @@ fn log(periods: &[Period]) {
         for &(start, end, diff, ref project) in &project_periods {
             println!(
                 "    {start} to {end} {diff:>width$} {project}",
-                start = humanize_time(start),
-                end = humanize_time(end),
+                start = format_time(start),
+                end = format_time(end),
                 diff = format_duration(diff),
                 project = project.blue(),
                 width = max_diff_len
@@ -421,11 +421,11 @@ fn delete(project_name: &str, periods: &[Period], save: fn(&[Period])) {
     }
 }
 
-fn humanize_datetime(time: DateTime<Utc>) -> String {
+fn format_datetime(time: DateTime<Utc>) -> String {
     time.with_timezone(&Local).format("%F %H:%M").to_string()
 }
 
-fn humanize_time(time: DateTime<Utc>) -> String {
+fn format_time(time: DateTime<Utc>) -> String {
     time.with_timezone(&Local).format("%H:%M").to_string()
 }
 
@@ -457,27 +457,6 @@ fn format_duration(duration: Duration) -> String {
             minutes = minutes,
             seconds = seconds
         )
-    }
-}
-
-fn humanize_duration(time: Duration) -> String {
-    let hours = time.num_hours();
-    let minutes = time.num_minutes() % 60;
-    let seconds = time.num_seconds() % 60;
-    if minutes == 0 {
-        if seconds < 5 {
-            String::from("just now")
-        } else {
-            String::from("seconds ago")
-        }
-    } else if hours == 0 {
-        if minutes == 1 {
-            format!("{minutes} minute ago", minutes = minutes)
-        } else {
-            format!("{minutes} minutes ago", minutes = minutes)
-        }
-    } else {
-        format!("{hours}:{minutes}", hours = hours, minutes = minutes)
     }
 }
 
