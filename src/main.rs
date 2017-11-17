@@ -156,7 +156,7 @@ fn start(project_name: &str, mut periods: Vec<Period>, save: fn(&[Period])) {
         }
     }
     let current_period = create_period(project_name);
-    print!(
+    println!(
         "Started tracking project {} at {}",
         current_period.project.blue(),
         format_time(current_period.start_time)
