@@ -243,8 +243,6 @@ fn restart(periods: &[Period], save: fn(&[Period])) {
 
 fn log(periods: &[Period]) {
     let mut days: HashMap<Date<chrono::Local>, Vec<Period>> = HashMap::new();
-    let mut project_periods = Vec::new();
-    let mut max_diff_len = 0;
 
     // organize periods by day
     for period in periods {
@@ -253,8 +251,13 @@ fn log(periods: &[Period]) {
             period.clone(),
         );
     }
+
+    // order days
+    let mut days: Vec<(Date<chrono::Local>, Vec<Period>)> = days.into_iter().collect();
+    days.sort_by_key(|&(a, ref _b)| a);
+
     // count the total time tracker per day
-    for (date, day) in &days {
+    for &(ref date, ref day) in &days {
         let d = day.into_iter().fold(Duration::zero(), |acc, x| {
             acc +
                 (x.end_time.unwrap_or_else(Utc::now).signed_duration_since(
@@ -270,6 +273,7 @@ fn log(periods: &[Period]) {
             duration = format_duration(d).bold()
         );
         // find time tracker per period
+        let mut project_periods = Vec::new();
         for period in day.iter() {
             // push periods onto vector so we can could there lengths and properly align them
             match period.end_time {
@@ -281,34 +285,23 @@ fn log(periods: &[Period]) {
                         diff,
                         period.project.clone(),
                     ));
-                    if format_duration(diff).len() > max_diff_len {
-                        max_diff_len = format_duration(diff).len()
-                    }
+                    println!("    {start} to {end} {diff:>width$} {project}",
+                        start = format_time(period.start_time),
+                        end = format_time(end_time),
+                        diff = format_duration(diff),
+                        project = period.project.clone().blue(),
+                        width = 11)
                 }
                 None => {
                     let diff = Utc::now().signed_duration_since(period.start_time);
-                    project_periods.push((
-                        period.start_time,
-                        Utc::now(),
-                        diff,
-                        period.project.clone(),
-                    ));
-                    if format_duration(diff).len() > max_diff_len {
-                        max_diff_len = format_duration(diff).len()
-                    }
+                    println!("    {start} to {end} {diff:>width$} {project}",
+                        start = format_time(period.start_time),
+                        end = format_time(Utc::now()),
+                        diff = format_duration(diff),
+                        project = period.project.clone().blue(),
+                        width = 11)
                 }
             }
-        }
-        project_periods.sort();
-        for &(start, end, diff, ref project) in &project_periods {
-            println!(
-                "    {start} to {end} {diff:>width$} {project}",
-                start = format_time(start),
-                end = format_time(end),
-                diff = format_duration(diff),
-                project = project.blue(),
-                width = max_diff_len
-            );
         }
     }
 }
@@ -438,20 +431,20 @@ fn format_duration(duration: Duration) -> String {
         format!("{}s", seconds)
     } else if hours == 0 {
         format!(
-            "{minutes}m {seconds}s",
+            "{minutes}m {seconds:>2}s",
             minutes = minutes,
             seconds = seconds
         )
     } else if days == 0 {
         format!(
-            "{hours}h {minutes}m {seconds}s",
+            "{hours}h {minutes:>2}m {seconds:>2}s",
             hours = hours,
             minutes = minutes,
             seconds = seconds
         )
     } else {
         format!(
-            "{days}d {hours}h {minutes}m {seconds}s",
+            "{days}d {hours:>2}h {minutes:>2}m {seconds:>2}s",
             days = days,
             hours = hours,
             minutes = minutes,
