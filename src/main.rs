@@ -1,3 +1,4 @@
+extern crate atty;
 extern crate chrono;
 #[macro_use]
 extern crate clap;
@@ -16,6 +17,7 @@ use std::path::{Path, PathBuf};
 use std::collections::HashMap;
 use std::process::Command;
 
+use atty::Stream;
 use chrono::{Date, DateTime, Duration, Local, Utc};
 use clap::{App, AppSettings, Arg, SubCommand};
 use serde_json::Error;
@@ -97,6 +99,10 @@ fn main() {
         .get_matches();
 
     let time_periods = periods();
+
+    if !atty::is(Stream::Stdout) {
+        colored::control::set_override(false);
+    }
 
     if let Some(matches) = matches.subcommand_matches("start") {
         if matches.is_present("project") {
