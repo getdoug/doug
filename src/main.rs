@@ -291,21 +291,25 @@ fn log(periods: &[Period]) {
                         diff,
                         period.project.clone(),
                     ));
-                    println!("    {start} to {end} {diff:>width$} {project}",
+                    println!(
+                        "    {start} to {end} {diff:>width$} {project}",
                         start = format_time(period.start_time),
                         end = format_time(end_time),
                         diff = format_duration(diff),
                         project = period.project.clone().blue(),
-                        width = 11)
+                        width = 11
+                    )
                 }
                 None => {
                     let diff = Utc::now().signed_duration_since(period.start_time);
-                    println!("    {start} to {end} {diff:>width$} {project}",
+                    println!(
+                        "    {start} to {end} {diff:>width$} {project}",
                         start = format_time(period.start_time),
                         end = format_time(Utc::now()),
                         diff = format_duration(diff),
                         project = period.project.clone().blue(),
-                        width = 11)
+                        width = 11
+                    )
                 }
             }
         }
