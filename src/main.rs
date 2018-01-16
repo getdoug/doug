@@ -56,6 +56,9 @@ fn main() {
         .subcommand(
             SubCommand::with_name("status")
                 .about("Display elapsed time, start time, and running project name")
+                .arg(Arg::with_name("t").short("t").long("time").help(
+                    "Print time for currently tracked project.",
+                ))
                 .arg(Arg::with_name("s").short("s").long("simple").help(
                     "Print running project name or nothing if there isn't a running project.",
                 )),
@@ -133,7 +136,7 @@ fn main() {
     }
 
     if let Some(matches) = matches.subcommand_matches("status") {
-        status(&time_periods, matches.is_present("s"));
+        status(&time_periods, matches.is_present("s"), matches.is_present("t"));
     }
 
     match matches.subcommand_name() {
@@ -171,13 +174,16 @@ fn start(project_name: &str, mut periods: Vec<Period>, save: fn(&[Period])) {
     save(&periods.to_vec());
 }
 
-fn status(periods: &[Period], simple: bool) {
+fn status(periods: &[Period], simple_name: bool, simple_time: bool) {
     if let Some(period) = periods.last() {
         if period.end_time.is_none() {
             let diff = Utc::now().signed_duration_since(period.start_time);
-            if simple {
+            if simple_name {
                 return println!("{}", period.project);
-            } else {
+            } else if simple_time {
+                return println!("{}", format_duration(diff));
+            }
+            else {
                 return println!(
                     "Project {} started {} ago ({})",
                     period.project.magenta(),
@@ -187,7 +193,7 @@ fn status(periods: &[Period], simple: bool) {
             }
         }
     }
-    if !simple {
+    if !simple_name || !simple_time {
         eprintln!("No running project");
     }
 }
