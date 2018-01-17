@@ -136,7 +136,11 @@ fn main() {
     }
 
     if let Some(matches) = matches.subcommand_matches("status") {
-        status(&time_periods, matches.is_present("s"), matches.is_present("t"));
+        status(
+            &time_periods,
+            matches.is_present("s"),
+            matches.is_present("t"),
+        );
     }
 
     match matches.subcommand_name() {
@@ -182,8 +186,7 @@ fn status(periods: &[Period], simple_name: bool, simple_time: bool) {
                 return println!("{}", period.project);
             } else if simple_time {
                 return println!("{}", format_duration(diff));
-            }
-            else {
+            } else {
                 return println!(
                     "Project {} started {} ago ({})",
                     period.project.magenta(),
@@ -193,7 +196,7 @@ fn status(periods: &[Period], simple_name: bool, simple_time: bool) {
             }
         }
     }
-    if !simple_name || !simple_time {
+    if !(simple_name || simple_time) {
         eprintln!("No running project");
     }
 }
