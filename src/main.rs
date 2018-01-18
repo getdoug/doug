@@ -12,14 +12,14 @@ extern crate serde_json;
 use std::env;
 use std::fs;
 use std::fs::{DirBuilder, OpenOptions};
-use std::io::Write;
+use std::io::{Write, stdout};
 use std::path::{Path, PathBuf};
 use std::collections::HashMap;
 use std::process::Command;
 
 use atty::Stream;
 use chrono::{Date, DateTime, Duration, Local, Utc};
-use clap::{App, AppSettings, Arg, SubCommand};
+use clap::{App, AppSettings, Arg, SubCommand, Shell};
 use serde_json::Error;
 use colored::*;
 
@@ -30,8 +30,18 @@ struct Period {
     end_time: Option<DateTime<Utc>>,
 }
 
+arg_enum!{
+    #[derive(PartialEq, Debug)]
+    pub enum Shells {
+        Bash,
+        Zsh,
+        Fish,
+        PowerShell,
+    }
+}
+
 fn main() {
-    let matches = App::new("Doug")
+    let mut cli = App::new("Doug")
         .version(crate_version!())
         .about("A time tracking command-line utility")
         .author(crate_authors!())
@@ -75,9 +85,50 @@ fn main() {
         .subcommand(SubCommand::with_name("log").about(
             "Display time intervals across all projects",
         ))
-        .subcommand(SubCommand::with_name("report").about(
-            "Display aggregate time from projects",
-        ))
+        .subcommand(
+            SubCommand::with_name("report")
+                .about("Display aggregate time from projects")
+                .arg(
+                    Arg::with_name("year")
+                        .short("y")
+                        .long("year")
+                        .help(
+                            "Limit report to past year. Use multiple to increase interval.",
+                        )
+                        .overrides_with_all(&["month", "week", "day"])
+                        .multiple(true),
+                )
+                .arg(
+                    Arg::with_name("month")
+                        .short("m")
+                        .long("month")
+                        .help(
+                            "Limit report to past month. Use multiple to increase interval.",
+                        )
+                        .overrides_with_all(&["year", "week", "day"])
+                        .multiple(true),
+                )
+                .arg(
+                    Arg::with_name("week")
+                        .short("w")
+                        .long("week")
+                        .help(
+                            "Limit report to past week. Use multiple to increase interval.",
+                        )
+                        .overrides_with_all(&["year", "month", "day"])
+                        .multiple(true),
+                )
+                .arg(
+                    Arg::with_name("day")
+                        .short("d")
+                        .long("day")
+                        .help(
+                            "Limit report to past day. Use multiple to increase interval.",
+                        )
+                        .overrides_with_all(&["year", "month", "week"])
+                        .multiple(true),
+                ),
+        )
         .subcommand(
             SubCommand::with_name("amend")
                 .about("Change name of currently running project")
@@ -91,6 +142,20 @@ fn main() {
             "Edit last frame or currently running frame",
         ))
         .subcommand(
+            SubCommand::with_name("generate-completions")
+                .about("Generate completions")
+                .arg(
+                    Arg::with_name("shell")
+                        .help("shell to generate completion for (default: bash).")
+                        .short("s")
+                        .long("shell")
+                        .possible_values(&Shells::variants())
+                        .case_insensitive(true)
+                        .default_value("bash")
+                        .takes_value(true),
+                ),
+        )
+        .subcommand(
             SubCommand::with_name("delete")
                 .about("Delete all intervals for project")
                 .arg(
@@ -98,8 +163,9 @@ fn main() {
                         .help("new project name")
                         .required(true),
                 ),
-        )
-        .get_matches();
+        );
+
+    let matches = cli.clone().get_matches();
 
     let time_periods = periods();
 
@@ -143,12 +209,47 @@ fn main() {
         );
     }
 
+    if let Some(matches) = matches.subcommand_matches("report") {
+        report(
+            &time_periods,
+            (
+                matches.is_present("year"),
+                matches.occurrences_of("year") as i32,
+            ),
+            (
+                matches.is_present("month"),
+                matches.occurrences_of("month") as i32,
+            ),
+            (
+                matches.is_present("week"),
+                matches.occurrences_of("week") as i32,
+            ),
+            (
+                matches.is_present("day"),
+                matches.occurrences_of("day") as i32,
+            ),
+        );
+    }
+
+    if let Some(matches) = matches.subcommand_matches("generate-completions") {
+        if matches.is_present("shell") {
+            match matches.value_of("shell") {
+                Some("bash") => cli.gen_completions_to("doug", Shell::Bash, &mut stdout()),
+                Some("zsh") => cli.gen_completions_to("doug", Shell::Zsh, &mut stdout()),
+                Some("fish") => cli.gen_completions_to("doug", Shell::Fish, &mut stdout()),
+                Some("powershell") => {
+                    cli.gen_completions_to("doug", Shell::PowerShell, &mut stdout())
+                }
+                _ => eprintln!("Invalid option"),
+            }
+        }
+    }
+
     match matches.subcommand_name() {
         Some("stop") => stop(time_periods, save_periods),
         Some("cancel") => cancel(time_periods, save_periods),
         Some("restart") => restart(&time_periods, save_periods),
         Some("log") => log(&time_periods),
-        Some("report") => report(&time_periods),
         Some("edit") => edit(),
         _ => {}
     }
@@ -325,12 +426,51 @@ fn log(periods: &[Period]) {
     }
 }
 
-fn report(periods: &[Period]) {
+fn add_interval(
+    start_limit: DateTime<Utc>,
+    (start_time, end_time): (DateTime<Utc>, Option<DateTime<Utc>>),
+    ref mut start_date: &mut Date<Local>,
+) -> Duration {
+    // Accumulates intervals based on limits.
+    // Finds earliest start date for printing out later
+    if start_time > start_limit {
+        if start_time.with_timezone(&Local).date() < **start_date {
+            **start_date = start_time.with_timezone(&Local).date();
+        }
+        return end_time.unwrap_or_else(Utc::now).signed_duration_since(
+            start_time,
+        );
+    } else if end_time.unwrap_or_else(Utc::now) >= start_limit {
+        if start_limit.with_timezone(&Local).date() < **start_date {
+            **start_date = start_limit.with_timezone(&Local).date();
+        }
+        return end_time.unwrap_or_else(Utc::now).signed_duration_since(
+            start_limit,
+        );
+    } else {
+        return Duration::zero();
+    }
+}
+
+
+fn report(
+    periods: &[Period],
+    (past_year, past_year_occur): (bool, i32),
+    (past_month, past_month_occur): (bool, i32),
+    (past_week, past_week_occur): (bool, i32),
+    (past_day, past_day_occur): (bool, i32),
+) {
     let mut days: HashMap<String, Vec<Period>> = HashMap::new();
     let mut start_date = Utc::now().with_timezone(&Local).date();
     let mut results: Vec<(String, Duration)> = Vec::new();
     let mut max_proj_len = 0;
     let mut max_diff_len = 0;
+
+    let one_year = Duration::days(365);
+    let one_month = Duration::days(31);
+    let one_week = Duration::weeks(1);
+    let one_day = Duration::days(1);
+    let today = Utc::now();
 
     // organize periods by project
     for period in periods {
@@ -338,21 +478,35 @@ fn report(periods: &[Period]) {
             .or_insert_with(Vec::new)
             .push(period.clone());
     }
-    //
+
     for (project, intervals) in &days {
         // sum total time per project
         let duration = intervals.into_iter().fold(Duration::zero(), |acc, x| {
-            acc +
-                (x.end_time.unwrap_or_else(Utc::now).signed_duration_since(
-                    x.start_time,
-                ))
-        });
-        // determine start date of report period
-        for x in intervals.iter() {
-            if x.start_time.with_timezone(&Local).date() < start_date {
-                start_date = x.start_time.with_timezone(&Local).date();
+            // if start time is beyond our limit, but end time is within
+            // add duration of time within boundaries to total
+            if past_year {
+                let start_limit = today - one_year * past_year_occur;
+                return acc + add_interval(start_limit, (x.start_time, x.end_time), &mut start_date);
+            } else if past_month {
+                let start_limit = today - one_month * past_month_occur;
+                return acc + add_interval(start_limit, (x.start_time, x.end_time), &mut start_date);
+            } else if past_week {
+                let start_limit = today - one_week * past_week_occur;
+                return acc + add_interval(start_limit, (x.start_time, x.end_time), &mut start_date);
+            } else if past_day {
+                let start_limit = today - one_day * past_day_occur;
+                return acc + add_interval(start_limit, (x.start_time, x.end_time), &mut start_date);
+            } else {
+                if x.start_time.with_timezone(&Local).date() < start_date {
+                    start_date = x.start_time.with_timezone(&Local).date();
+                }
+                acc +
+                    (x.end_time.unwrap_or_else(Utc::now).signed_duration_since(
+                        x.start_time,
+                    ))
             }
-        }
+
+        });
         // find lengths of project names for alignment
         if project.to_string().len() > max_proj_len {
             max_proj_len = project.to_string().len();

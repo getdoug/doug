@@ -19,6 +19,11 @@ brew install getdoug/doug/doug
 cargo install doug
 ```
 
+### Bash completions
+```
+doug generate-completions --shell bash > $(brew --prefix)/etc/bash_completion.d/doug.bash
+```
+
 ## Usage
 ```
 USAGE:
@@ -110,10 +115,14 @@ FLAGS:
 Display aggregate time from projects
 
 USAGE:
-    doug report
+    doug report [FLAGS]
 
 FLAGS:
-    -h, --help    Prints help information
+    -d, --day      Limit report to past day. Use multiple to increase interval.
+    -h, --help     Prints help information
+    -m, --month    Limit report to past month. Use multiple to increase interval.
+    -w, --week     Limit report to past week. Use multiple to increase interval.
+    -y, --year     Limit report to past year. Use multiple to increase interval.
 ```
 ### amend
 ```
