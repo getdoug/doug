@@ -115,7 +115,7 @@ FLAGS:
 Display aggregate time from projects
 
 USAGE:
-    doug report [FLAGS]
+    doug report [FLAGS] [OPTIONS]
 
 FLAGS:
     -d, --day      Limit report to past day. Use multiple to increase interval.
@@ -123,6 +123,10 @@ FLAGS:
     -m, --month    Limit report to past month. Use multiple to increase interval.
     -w, --week     Limit report to past week. Use multiple to increase interval.
     -y, --year     Limit report to past year. Use multiple to increase interval.
+
+OPTIONS:
+    -f, --from <from>    Date when report should start (e.g. 2018-1-1)
+    -t, --to <to>        Date when report should end (e.g. 2018-1-20)
 ```
 ### amend
 ```

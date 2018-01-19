@@ -16,9 +16,10 @@ use std::io::{Write, stdout};
 use std::path::{Path, PathBuf};
 use std::collections::HashMap;
 use std::process::Command;
+use std::process::exit;
 
 use atty::Stream;
-use chrono::{Date, DateTime, Duration, Local, Utc};
+use chrono::{Date, DateTime, Duration, Local, Utc, NaiveDate, TimeZone};
 use clap::{App, AppSettings, Arg, SubCommand, Shell};
 use serde_json::Error;
 use colored::*;
@@ -95,7 +96,7 @@ fn main() {
                         .help(
                             "Limit report to past year. Use multiple to increase interval.",
                         )
-                        .overrides_with_all(&["month", "week", "day"])
+                        .overrides_with_all(&["month", "week", "day", "from", "to"])
                         .multiple(true),
                 )
                 .arg(
@@ -105,7 +106,7 @@ fn main() {
                         .help(
                             "Limit report to past month. Use multiple to increase interval.",
                         )
-                        .overrides_with_all(&["year", "week", "day"])
+                        .overrides_with_all(&["year", "week", "day", "from", "to"])
                         .multiple(true),
                 )
                 .arg(
@@ -115,7 +116,7 @@ fn main() {
                         .help(
                             "Limit report to past week. Use multiple to increase interval.",
                         )
-                        .overrides_with_all(&["year", "month", "day"])
+                        .overrides_with_all(&["year", "month", "day", "from", "to"])
                         .multiple(true),
                 )
                 .arg(
@@ -125,8 +126,24 @@ fn main() {
                         .help(
                             "Limit report to past day. Use multiple to increase interval.",
                         )
-                        .overrides_with_all(&["year", "month", "week"])
+                        .overrides_with_all(&["year", "month", "week", "from", "to"])
                         .multiple(true),
+                )
+                .arg(
+                    Arg::with_name("from")
+                        .short("f")
+                        .long("from")
+                        .help("Date when report should start (e.g. 2018-1-1)")
+                        .overrides_with_all(&["year", "month", "week", "day"])
+                        .takes_value(true),
+                )
+                .arg(
+                    Arg::with_name("to")
+                        .short("t")
+                        .long("to")
+                        .help("Date when report should end (e.g. 2018-1-20)")
+                        .overrides_with_all(&["year", "month", "week", "day"])
+                        .takes_value(true),
                 ),
         )
         .subcommand(
@@ -228,6 +245,8 @@ fn main() {
                 matches.is_present("day"),
                 matches.occurrences_of("day") as i32,
             ),
+            matches.value_of("from"),
+            matches.value_of("to"),
         );
     }
 
@@ -428,25 +447,55 @@ fn log(periods: &[Period]) {
 
 fn add_interval(
     start_limit: DateTime<Utc>,
+    end_limit: DateTime<Utc>,
     (start_time, end_time): (DateTime<Utc>, Option<DateTime<Utc>>),
     ref mut start_date: &mut Date<Local>,
+    ref mut end_date: &mut Date<Local>,
 ) -> Duration {
     // Accumulates intervals based on limits.
     // Finds earliest start date for printing out later
-    if start_time > start_limit {
+    let end_time = end_time.unwrap_or_else(Utc::now);
+    // start time is within starting limit
+    if start_time >= start_limit && start_time <= end_limit {
+        // Find starting date
+        // FIXME:
         if start_time.with_timezone(&Local).date() < **start_date {
             **start_date = start_time.with_timezone(&Local).date();
         }
-        return end_time.unwrap_or_else(Utc::now).signed_duration_since(
-            start_time,
-        );
-    } else if end_time.unwrap_or_else(Utc::now) >= start_limit {
+
+
+        // end time is outside of end limit
+        if end_time > end_limit {
+            if end_limit.with_timezone(&Local).date() > **end_date {
+                **end_date = end_limit.with_timezone(&Local).date();
+            }
+            return end_limit.signed_duration_since(start_time);
+        } else {
+            if end_time.with_timezone(&Local).date() > **end_date {
+                **end_date = end_time.with_timezone(&Local).date();
+            }
+            return end_time.signed_duration_since(start_time);
+        }
+    } else if end_time >= start_limit && end_time <= end_limit {
+        // Find starting date
+        // FIXME
         if start_limit.with_timezone(&Local).date() < **start_date {
             **start_date = start_limit.with_timezone(&Local).date();
         }
-        return end_time.unwrap_or_else(Utc::now).signed_duration_since(
-            start_limit,
-        );
+
+        if end_time > end_limit {
+            if end_limit.with_timezone(&Local).date() > **end_date {
+                **end_date = end_limit.with_timezone(&Local).date();
+            }
+
+            return end_limit.signed_duration_since(start_time);
+        } else {
+            if end_time.with_timezone(&Local).date() > **end_date {
+                **end_date = end_time.with_timezone(&Local).date();
+            }
+
+            return end_time.signed_duration_since(start_limit);
+        }
     } else {
         return Duration::zero();
     }
@@ -459,9 +508,14 @@ fn report(
     (past_month, past_month_occur): (bool, i32),
     (past_week, past_week_occur): (bool, i32),
     (past_day, past_day_occur): (bool, i32),
+    from_date: Option<&str>,
+    to_date: Option<&str>,
 ) {
     let mut days: HashMap<String, Vec<Period>> = HashMap::new();
-    let mut start_date = Utc::now().with_timezone(&Local).date();
+    let mut start_date = Utc::today().with_timezone(&Local);
+    let mut end_date = Utc.from_utc_date(&NaiveDate::from_ymd(1, 1, 1))
+        .with_timezone(&Local);
+
     let mut results: Vec<(String, Duration)> = Vec::new();
     let mut max_proj_len = 0;
     let mut max_diff_len = 0;
@@ -471,6 +525,35 @@ fn report(
     let one_week = Duration::weeks(1);
     let one_day = Duration::days(1);
     let today = Utc::now();
+
+    let mut from_date_parsed = Local::today();
+    let mut to_date_parsed = Local::today();
+    let offset = to_date_parsed.offset().clone();
+
+    if let Some(from_date_string) = from_date {
+        match NaiveDate::parse_from_str(from_date_string, "%Y-%m-%d") {
+            Ok(result) => {
+                from_date_parsed = Date::from_utc(result, offset);
+            }
+            Err(_error) => {
+                eprintln!("Error: {}", "Invalid date format.".red());
+                eprintln!("Required format: {}", "%Y-%m-%d".blue());
+                exit(1)
+            }
+        }
+    }
+    if let Some(to_date_string) = to_date {
+        match NaiveDate::parse_from_str(to_date_string, "%Y-%m-%d") {
+            Ok(result) => {
+                to_date_parsed = Date::from_utc(result, offset);
+            }
+            Err(_error) => {
+                eprintln!("Error: {}", "Invalid date format.".red());
+                eprintln!("Required format: {}", "%Y-%m-%d".blue());
+                exit(1)
+            }
+        }
+    }
 
     // organize periods by project
     for period in periods {
@@ -486,19 +569,62 @@ fn report(
             // add duration of time within boundaries to total
             if past_year {
                 let start_limit = today - one_year * past_year_occur;
-                return acc + add_interval(start_limit, (x.start_time, x.end_time), &mut start_date);
+                return acc +
+                    add_interval(
+                        start_limit,
+                        Utc::now(),
+                        (x.start_time, x.end_time),
+                        &mut start_date,
+                        &mut end_date,
+                    );
             } else if past_month {
                 let start_limit = today - one_month * past_month_occur;
-                return acc + add_interval(start_limit, (x.start_time, x.end_time), &mut start_date);
+                return acc +
+                    add_interval(
+                        start_limit,
+                        Utc::now(),
+                        (x.start_time, x.end_time),
+                        &mut start_date,
+                        &mut end_date,
+                    );
             } else if past_week {
                 let start_limit = today - one_week * past_week_occur;
-                return acc + add_interval(start_limit, (x.start_time, x.end_time), &mut start_date);
+                return acc +
+                    add_interval(
+                        start_limit,
+                        Utc::now(),
+                        (x.start_time, x.end_time),
+                        &mut start_date,
+                        &mut end_date,
+                    );
             } else if past_day {
                 let start_limit = today - one_day * past_day_occur;
-                return acc + add_interval(start_limit, (x.start_time, x.end_time), &mut start_date);
+                return acc +
+                    add_interval(
+                        start_limit,
+                        Utc::now(),
+                        (x.start_time, x.end_time),
+                        &mut start_date,
+                        &mut end_date,
+                    );
+            } else if from_date.is_some() || to_date.is_some() {
+                let start_limit = from_date_parsed.and_hms(0, 0, 0).with_timezone(&Utc);
+                let end_limit = to_date_parsed.and_hms(0, 0, 0).with_timezone(&Utc);
+                return acc +
+                    add_interval(
+                        start_limit,
+                        end_limit,
+                        (x.start_time, x.end_time),
+                        &mut start_date,
+                        &mut end_date,
+                    );
             } else {
+                let end_time = x.end_time.unwrap_or_else(Utc::now);
                 if x.start_time.with_timezone(&Local).date() < start_date {
                     start_date = x.start_time.with_timezone(&Local).date();
+                }
+                if end_time.with_timezone(&Local).date() > end_date {
+                    end_date = end_time.with_timezone(&Local).date();
                 }
                 acc +
                     (x.end_time.unwrap_or_else(Utc::now).signed_duration_since(
@@ -520,7 +646,7 @@ fn report(
     println!(
         "{start} -> {end}",
         start = start_date.format("%A %-d %B %Y").to_string().blue(),
-        end = Utc::now().format("%A %-d %B %Y").to_string().blue()
+        end = end_date.format("%A %-d %B %Y").to_string().blue()
     );
     results.sort();
     for &(ref project, ref duration) in &results {
