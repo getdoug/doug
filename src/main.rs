@@ -596,29 +596,21 @@ fn format_time(time: DateTime<Utc>) -> String {
 }
 
 fn format_duration(duration: Duration) -> String {
-    let days = duration.num_days();
-    let hours = duration.num_hours() % 24;
+    let hours = duration.num_hours();
     let minutes = duration.num_minutes() % 60;
     let seconds = duration.num_seconds() % 60;
-    if minutes == 0 {
+
+    if duration.num_minutes() == 0 {
         format!("{}s", seconds)
-    } else if hours == 0 {
+    } else if duration.num_hours() == 0 {
         format!(
             "{minutes}m {seconds:>2}s",
             minutes = minutes,
             seconds = seconds
         )
-    } else if days == 0 {
-        format!(
-            "{hours}h {minutes:>2}m {seconds:>2}s",
-            hours = hours,
-            minutes = minutes,
-            seconds = seconds
-        )
     } else {
         format!(
-            "{days}d {hours:>2}h {minutes:>2}m {seconds:>2}s",
-            days = days,
+            "{hours}h {minutes:>2}m {seconds:>2}s",
             hours = hours,
             minutes = minutes,
             seconds = seconds
