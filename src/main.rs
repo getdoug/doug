@@ -58,11 +58,9 @@ fn main() {
         .subcommand(
             SubCommand::with_name("start")
                 .about("Track new or existing project")
-                .arg(
-                    Arg::with_name("project")
-                        .help("project to track")
-                        .required(true),
-                ),
+                .arg(Arg::with_name("project").help(
+                    "project to track. If missing, start subcommand behaves like restart.",
+                )),
         )
         .subcommand(
             SubCommand::with_name("status")
@@ -197,6 +195,9 @@ fn main() {
                 time_periods.clone(),
                 save_periods,
             );
+        } else {
+            // Restart last project if not argument is provided
+            restart(&time_periods, save_periods);
         }
     }
 
