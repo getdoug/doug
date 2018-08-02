@@ -634,6 +634,12 @@ fn report(
             }
 
         });
+
+        // skip projects that weren't worked on
+        if duration == Duration::zero() {
+            continue;
+        }
+
         // find lengths of project names for alignment
         if project.to_string().len() > max_proj_len {
             max_proj_len = project.to_string().len();
