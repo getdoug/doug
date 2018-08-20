@@ -41,7 +41,7 @@ pub fn start(project_name: &str, mut periods: Vec<Period>, save: fn(&[Period])) 
             }
         }
     }
-    let current_period = create_period(project_name);
+    let current_period = Period::new(project_name);
     println!(
         "Started tracking project {} at {}",
         current_period.project.blue(),
@@ -110,7 +110,7 @@ pub fn restart(periods: &[Period], save: fn(&[Period])) {
     let mut new_periods = periods.to_vec();
     if let Some(period) = periods.last() {
         if !period.end_time.is_none() {
-            let new_period = create_period(&period.project);
+            let new_period = Period::new(&period.project);
             new_periods.push(new_period);
             save(&new_periods.to_vec());
             return println!("Tracking last running project: {}", period.project.blue());
@@ -496,11 +496,13 @@ fn format_duration(duration: Duration) -> String {
     }
 }
 
-fn create_period(project: &str) -> Period {
-    Period {
-        project: String::from(project),
-        start_time: Utc::now(),
-        end_time: None,
+impl Period {
+    fn new(project: &str) -> Period {
+        Period {
+            project: String::from(project),
+            start_time: Utc::now(),
+            end_time: None,
+        }
     }
 }
 
