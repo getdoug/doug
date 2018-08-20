@@ -201,8 +201,8 @@ pub fn add_interval(
     start_limit: DateTime<Utc>,
     end_limit: DateTime<Utc>,
     (start_time, end_time): (DateTime<Utc>, Option<DateTime<Utc>>),
-    ref mut start_date: &mut Date<Local>,
-    ref mut end_date: &mut Date<Local>,
+    start_date: &mut Date<Local>,
+    end_date: &mut Date<Local>,
 ) -> Duration {
     // Accumulates intervals based on limits.
     // Finds earliest start date for printing out later
@@ -211,38 +211,38 @@ pub fn add_interval(
     if start_time >= start_limit && start_time <= end_limit {
         // Find starting date
         // FIXME:
-        if start_time.with_timezone(&Local).date() < **start_date {
-            **start_date = start_time.with_timezone(&Local).date();
+        if start_time.with_timezone(&Local).date() < *start_date {
+            *start_date = start_time.with_timezone(&Local).date();
         }
 
         // end time is outside of end limit
         if end_time > end_limit {
-            if end_limit.with_timezone(&Local).date() > **end_date {
-                **end_date = end_limit.with_timezone(&Local).date();
+            if end_limit.with_timezone(&Local).date() > *end_date {
+                *end_date = end_limit.with_timezone(&Local).date();
             }
             end_limit.signed_duration_since(start_time)
         } else {
-            if end_time.with_timezone(&Local).date() > **end_date {
-                **end_date = end_time.with_timezone(&Local).date();
+            if end_time.with_timezone(&Local).date() > *end_date {
+                *end_date = end_time.with_timezone(&Local).date();
             }
             end_time.signed_duration_since(start_time)
         }
     } else if end_time >= start_limit && end_time <= end_limit {
         // Find starting date
         // FIXME
-        if start_limit.with_timezone(&Local).date() < **start_date {
-            **start_date = start_limit.with_timezone(&Local).date();
+        if start_limit.with_timezone(&Local).date() < *start_date {
+            *start_date = start_limit.with_timezone(&Local).date();
         }
 
         if end_time > end_limit {
-            if end_limit.with_timezone(&Local).date() > **end_date {
-                **end_date = end_limit.with_timezone(&Local).date();
+            if end_limit.with_timezone(&Local).date() > *end_date {
+                *end_date = end_limit.with_timezone(&Local).date();
             }
 
             end_limit.signed_duration_since(start_time)
         } else {
-            if end_time.with_timezone(&Local).date() > **end_date {
-                **end_date = end_time.with_timezone(&Local).date();
+            if end_time.with_timezone(&Local).date() > *end_date {
+                *end_date = end_time.with_timezone(&Local).date();
             }
 
             end_time.signed_duration_since(start_limit)
