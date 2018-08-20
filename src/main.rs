@@ -1,3 +1,5 @@
+#![cfg_attr(test, deny(warnings))]
+
 extern crate atty;
 extern crate chrono;
 #[macro_use]
@@ -13,16 +15,6 @@ use atty::Stream;
 use clap::{App, AppSettings, Arg, Shell, SubCommand};
 
 use doug::*;
-
-arg_enum!{
-    #[derive(PartialEq, Debug)]
-    pub enum Shells {
-        Bash,
-        Zsh,
-        Fish,
-        PowerShell,
-    }
-}
 
 fn main() {
     let mut cli =
@@ -124,7 +116,7 @@ fn main() {
                             .help("shell to generate completion for (default: bash).")
                             .short("s")
                             .long("shell")
-                            .possible_values(&Shells::variants())
+                            .possible_values(&["bash", "zsh", "fish", "powershell"])
                             .case_insensitive(true)
                             .default_value("bash")
                             .takes_value(true),

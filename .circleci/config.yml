@@ -1,0 +1,54 @@
+version: 2
+
+jobs:
+
+  test:
+    docker:
+      - image: circleci/rust
+    steps:
+      - checkout
+      # https://circleci.com/docs/2.0/caching/
+      - restore_cache:
+          keys:
+            - doug-v1-{{ .Branch }}-{{ checksum "Cargo.lock" }}
+            - doug-v1-{{ .Branch }}-
+            - doug-v1-
+      - run:
+          name: install dependencies
+          command: |
+            cargo install
+      - save_cache:
+          paths:
+            - ~/.cargo/
+          key: doug-v1-{{ .Branch }}-{{ checksum "Cargo.lock" }}
+      - run:
+          name: run lints
+          command: |
+            cargo test
+
+  lint:
+    docker:
+      - image: circleci/rust
+    steps:
+      - checkout
+      # https://circleci.com/docs/2.0/caching/
+      - restore_cache:
+          keys:
+            - doug-v1-{{ .Branch }}-{{ checksum "Cargo.lock" }}
+            - doug-v1-{{ .Branch }}-
+            - doug-v1-
+      - run:
+          name: install dependencies
+          command: |
+            cargo install
+            rustup component add clippy-preview --toolchain=nightly
+            rustup component add rustfmt-preview --toolchain nightly
+      - save_cache:
+          paths:
+            - ~/.cargo/
+          key: doug-v1-{{ .Branch }}-{{ checksum "Cargo.lock" }}
+      - run:
+          name: run lints
+          command: |
+            cargo +nightly clippy -- -Dwarnings
+            cargo +nightly fmt

@@ -1,6 +1,4 @@
-extern crate atty;
 extern crate chrono;
-#[macro_use]
 extern crate clap;
 extern crate colored;
 extern crate serde;
