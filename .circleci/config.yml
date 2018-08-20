@@ -36,6 +36,7 @@ jobs:
       - run:
           name: install dependencies
           command: |
+            rustup install nightly
             rustup component add clippy-preview --toolchain=nightly
             rustup component add rustfmt-preview --toolchain nightly
       - save_cache:
