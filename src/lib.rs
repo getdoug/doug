@@ -107,7 +107,7 @@ pub fn cancel(mut periods: Vec<Period>, save: fn(&[Period])) {
 pub fn restart(periods: &[Period], save: fn(&[Period])) {
     let mut new_periods = periods.to_vec();
     if let Some(period) = periods.last() {
-        if !period.end_time.is_none() {
+        if period.end_time.is_some() {
             let new_period = Period::new(&period.project);
             new_periods.push(new_period);
             save(&new_periods.to_vec());
@@ -220,12 +220,12 @@ pub fn add_interval(
             if end_limit.with_timezone(&Local).date() > **end_date {
                 **end_date = end_limit.with_timezone(&Local).date();
             }
-            return end_limit.signed_duration_since(start_time);
+            end_limit.signed_duration_since(start_time)
         } else {
             if end_time.with_timezone(&Local).date() > **end_date {
                 **end_date = end_time.with_timezone(&Local).date();
             }
-            return end_time.signed_duration_since(start_time);
+            end_time.signed_duration_since(start_time)
         }
     } else if end_time >= start_limit && end_time <= end_limit {
         // Find starting date
@@ -239,16 +239,16 @@ pub fn add_interval(
                 **end_date = end_limit.with_timezone(&Local).date();
             }
 
-            return end_limit.signed_duration_since(start_time);
+            end_limit.signed_duration_since(start_time)
         } else {
             if end_time.with_timezone(&Local).date() > **end_date {
                 **end_date = end_time.with_timezone(&Local).date();
             }
 
-            return end_time.signed_duration_since(start_limit);
+            end_time.signed_duration_since(start_limit)
         }
     } else {
-        return Duration::zero();
+        Duration::zero()
     }
 }
 
@@ -279,7 +279,7 @@ pub fn report(
 
     let mut from_date_parsed = Local::today();
     let mut to_date_parsed = Local::today();
-    let offset = to_date_parsed.offset().clone();
+    let offset = *to_date_parsed.offset();
 
     if let Some(from_date_string) = from_date {
         match NaiveDate::parse_from_str(from_date_string, "%Y-%m-%d") {
@@ -320,50 +320,50 @@ pub fn report(
             // add duration of time within boundaries to total
             if past_year {
                 let start_limit = today - one_year * past_year_occur;
-                return acc + add_interval(
+                acc + add_interval(
                     start_limit,
                     Utc::now(),
                     (x.start_time, x.end_time),
                     &mut start_date,
                     &mut end_date,
-                );
+                )
             } else if past_month {
                 let start_limit = today - one_month * past_month_occur;
-                return acc + add_interval(
+                acc + add_interval(
                     start_limit,
                     Utc::now(),
                     (x.start_time, x.end_time),
                     &mut start_date,
                     &mut end_date,
-                );
+                )
             } else if past_week {
                 let start_limit = today - one_week * past_week_occur;
-                return acc + add_interval(
+                acc + add_interval(
                     start_limit,
                     Utc::now(),
                     (x.start_time, x.end_time),
                     &mut start_date,
                     &mut end_date,
-                );
+                )
             } else if past_day {
                 let start_limit = today - one_day * past_day_occur;
-                return acc + add_interval(
+                acc + add_interval(
                     start_limit,
                     Utc::now(),
                     (x.start_time, x.end_time),
                     &mut start_date,
                     &mut end_date,
-                );
+                )
             } else if from_date.is_some() || to_date.is_some() {
                 let start_limit = from_date_parsed.and_hms(0, 0, 0).with_timezone(&Utc);
                 let end_limit = to_date_parsed.and_hms(0, 0, 0).with_timezone(&Utc);
-                return acc + add_interval(
+                acc + add_interval(
                     start_limit,
                     end_limit,
                     (x.start_time, x.end_time),
                     &mut start_date,
                     &mut end_date,
-                );
+                )
             } else {
                 let end_time = x.end_time.unwrap_or_else(Utc::now);
                 if x.start_time.with_timezone(&Local).date() < start_date {
@@ -437,7 +437,7 @@ pub fn edit() {
         let mut edit = Command::new(editor);
         edit.arg(path.clone());
         let status = edit.status();
-        if !status.is_ok() {
+        if status.is_err() {
             eprintln!("Error: {}", "Problem with editing.".red());
         }
     } else {
@@ -520,7 +520,7 @@ pub fn periods() -> Vec<Period> {
         .read(true)
         .write(true)
         .open(&data_file_path)
-        .expect(&format!("Couldn't open datafile: {:?}", data_file_path));
+        .unwrap_or_else(|_| panic!(format!("Couldn't open datafile: {:?}", data_file_path)));
     // serialize periods from data file
     let periods: Result<Vec<Period>, Error> = serde_json::from_reader(data_file);
     match periods {
