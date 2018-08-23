@@ -1,4 +1,4 @@
-# Doug [![cargo-badge](https://img.shields.io/crates/v/doug.svg)](https://crates.io/crates/doug)
+# Doug [![CircleCI](https://circleci.com/gh/getdoug/doug.svg?style=svg)](https://circleci.com/gh/getdoug/doug) [![cargo-badge](https://img.shields.io/crates/v/doug.svg)](https://crates.io/crates/doug)
 > A time tracking command-line utility
 
 ## Why?
