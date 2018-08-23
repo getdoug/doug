@@ -133,7 +133,7 @@ fn main() {
 
     let matches = cli.clone().get_matches();
 
-    let time_periods = periods();
+    let model = Model::new();
 
     if !atty::is(Stream::Stdout) {
         colored::control::set_override(false);
@@ -141,46 +141,21 @@ fn main() {
 
     if let Some(matches) = matches.subcommand_matches("start") {
         if matches.is_present("project") {
-            start(
-                matches.value_of("project").unwrap(),
-                time_periods.clone(),
-                save_periods,
-            );
+            model.start(matches.value_of("project").unwrap());
         } else {
             // Restart last project if not argument is provided
-            restart(&time_periods, save_periods);
+            model.restart()
         }
-    }
-
-    if let Some(matches) = matches.subcommand_matches("amend") {
+    } else if let Some(matches) = matches.subcommand_matches("amend") {
         if matches.is_present("project") {
-            amend(
-                matches.value_of("project").expect("missing project name"),
-                time_periods.clone(),
-                save_periods,
-            );
+            model.amend(matches.value_of("project").expect("missing project name"));
         }
-    }
-
-    if let Some(matches) = matches.subcommand_matches("delete") {
-        delete(
-            matches.value_of("project").expect("missing project name"),
-            &time_periods.clone(),
-            save_periods,
-        );
-    }
-
-    if let Some(matches) = matches.subcommand_matches("status") {
-        status(
-            &time_periods,
-            matches.is_present("s"),
-            matches.is_present("t"),
-        );
-    }
-
-    if let Some(matches) = matches.subcommand_matches("report") {
-        report(
-            &time_periods,
+    } else if let Some(matches) = matches.subcommand_matches("delete") {
+        model.delete(matches.value_of("project").expect("missing project name"));
+    } else if let Some(matches) = matches.subcommand_matches("status") {
+        model.status(matches.is_present("s"), matches.is_present("t"));
+    } else if let Some(matches) = matches.subcommand_matches("report") {
+        model.report(
             (
                 matches.is_present("year"),
                 matches.occurrences_of("year") as i32,
@@ -200,9 +175,7 @@ fn main() {
             matches.value_of("from"),
             matches.value_of("to"),
         );
-    }
-
-    if let Some(matches) = matches.subcommand_matches("generate-completions") {
+    } else if let Some(matches) = matches.subcommand_matches("generate-completions") {
         if matches.is_present("shell") {
             match matches.value_of("shell") {
                 Some("bash") => cli.gen_completions_to("doug", Shell::Bash, &mut stdout()),
@@ -214,14 +187,14 @@ fn main() {
                 _ => eprintln!("Invalid option"),
             }
         }
-    }
-
-    match matches.subcommand_name() {
-        Some("stop") => stop(time_periods, save_periods),
-        Some("cancel") => cancel(time_periods, save_periods),
-        Some("restart") => restart(&time_periods, save_periods),
-        Some("log") => log(&time_periods),
-        Some("edit") => edit(),
-        _ => {}
+    } else {
+        match matches.subcommand_name() {
+            Some("stop") => model.stop(),
+            Some("cancel") => model.cancel(),
+            Some("restart") => model.restart(),
+            Some("log") => model.log(),
+            Some("edit") => model.edit(),
+            _ => {}
+        }
     }
 }
