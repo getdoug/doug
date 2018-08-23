@@ -37,11 +37,11 @@ impl Period {
 }
 
 #[derive(Default)]
-pub struct Model {
+pub struct Doug {
     periods: Vec<Period>,
 }
 
-impl Model {
+impl Doug {
     pub fn new() -> Self {
         let home_dir =
             env::var("HOME").expect("Failed to find home directory from environment 'HOME'");
@@ -65,8 +65,8 @@ impl Model {
         let periods: Result<Vec<Period>, Error> = serde_json::from_reader(data_file);
 
         match periods {
-            Ok(periods) => Model { periods },
-            Err(ref error) if error.is_eof() => Model {
+            Ok(periods) => Doug { periods },
+            Err(ref error) if error.is_eof() => Doug {
                 periods: Vec::new(),
             },
             Err(error) => panic!("There was a serialization issue: {:?}", error),

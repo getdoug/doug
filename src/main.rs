@@ -133,7 +133,7 @@ fn main() {
 
     let matches = cli.clone().get_matches();
 
-    let model = Model::new();
+    let doug = Doug::new();
 
     if !atty::is(Stream::Stdout) {
         colored::control::set_override(false);
@@ -141,21 +141,21 @@ fn main() {
 
     if let Some(matches) = matches.subcommand_matches("start") {
         if matches.is_present("project") {
-            model.start(matches.value_of("project").unwrap());
+            doug.start(matches.value_of("project").unwrap());
         } else {
             // Restart last project if not argument is provided
-            model.restart()
+            doug.restart()
         }
     } else if let Some(matches) = matches.subcommand_matches("amend") {
         if matches.is_present("project") {
-            model.amend(matches.value_of("project").expect("missing project name"));
+            doug.amend(matches.value_of("project").expect("missing project name"));
         }
     } else if let Some(matches) = matches.subcommand_matches("delete") {
-        model.delete(matches.value_of("project").expect("missing project name"));
+        doug.delete(matches.value_of("project").expect("missing project name"));
     } else if let Some(matches) = matches.subcommand_matches("status") {
-        model.status(matches.is_present("s"), matches.is_present("t"));
+        doug.status(matches.is_present("s"), matches.is_present("t"));
     } else if let Some(matches) = matches.subcommand_matches("report") {
-        model.report(
+        doug.report(
             (
                 matches.is_present("year"),
                 matches.occurrences_of("year") as i32,
@@ -189,11 +189,11 @@ fn main() {
         }
     } else {
         match matches.subcommand_name() {
-            Some("stop") => model.stop(),
-            Some("cancel") => model.cancel(),
-            Some("restart") => model.restart(),
-            Some("log") => model.log(),
-            Some("edit") => model.edit(),
+            Some("stop") => doug.stop(),
+            Some("cancel") => doug.cancel(),
+            Some("restart") => doug.restart(),
+            Some("log") => doug.log(),
+            Some("edit") => doug.edit(),
             _ => {}
         }
     }
