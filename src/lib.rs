@@ -68,34 +68,44 @@ pub struct Doug {
 }
 
 impl Doug {
-    pub fn new() -> Self {
-        let home_dir =
-            env::var("HOME").expect("Failed to find home directory from environment 'HOME'");
+    pub fn new() -> Result<Self, String> {
+        let home_dir = match env::var("HOME") {
+            Ok(x) => x,
+            Err(_) => {
+                return Err("Failed to find home directory from environment 'HOME'. Doug needs 'HOME' to be set to find its data.".to_string());
+            }
+        };
         let mut folder = PathBuf::from(home_dir);
         folder.push(".doug");
         // create .doug directory
-        DirBuilder::new()
-            .recursive(true)
-            .create(&folder)
-            .expect("Couldn't create data directory");
+        match DirBuilder::new().recursive(true).create(&folder) {
+            Ok(_) => {}
+            Err(_) => return Err(format!("Couldn't create data directory: {:?}", folder)),
+        }
         // create data file
         let data_file_path = folder.as_path().join("periods.json");
-        let data_file = OpenOptions::new()
+        let data_file = match OpenOptions::new()
             .create(true)
             .read(true)
             .write(true)
             .open(&data_file_path)
-            .unwrap_or_else(|_| panic!(format!("Couldn't open datafile: {:?}", data_file_path)));
+        {
+            Ok(x) => x,
+            Err(_) => {
+                return Err(format!("Couldn't open datafile: {:?}", data_file_path));
+            }
+        };
 
         // serialize periods from data file
         let periods: Result<Vec<Period>, Error> = serde_json::from_reader(data_file);
 
         match periods {
-            Ok(periods) => Doug { periods },
-            Err(ref error) if error.is_eof() => Doug {
+            Ok(periods) => Ok(Doug { periods }),
+            // No periods exist. Create a new Doug instance.
+            Err(ref error) if error.is_eof() => Ok(Doug {
                 periods: Vec::new(),
-            },
-            Err(error) => panic!("There was a serialization issue: {:?}", error),
+            }),
+            Err(error) => Err(format!("There was a serialization issue: {:?}", error)),
         }
     }
 

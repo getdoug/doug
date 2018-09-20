@@ -15,6 +15,7 @@ use atty::Stream;
 use clap::{App, AppSettings, Arg, Shell, SubCommand};
 
 use doug::*;
+use std::process;
 
 fn main() {
     let mut cli =
@@ -147,7 +148,13 @@ fn main() {
 
     let matches = cli.clone().get_matches();
 
-    let mut doug = Doug::new();
+    let mut doug = match Doug::new() {
+        Ok(x) => x,
+        Err(e) => {
+            eprintln!("Error: {}", e);
+            process::exit(1)
+        }
+    };
 
     if !atty::is(Stream::Stdout) {
         colored::control::set_override(false);
@@ -203,9 +210,7 @@ fn main() {
         }
     } else if let Some(matches) = matches.subcommand_matches("edit") {
         doug.edit(matches.value_of("start"), matches.value_of("end"))
-    }
-
-    else {
+    } else {
         match matches.subcommand_name() {
             Some("stop") => doug.stop(),
             Some("cancel") => doug.cancel(),
