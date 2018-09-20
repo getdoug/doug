@@ -392,7 +392,7 @@ impl Doug {
         }
     }
 
-    pub fn restart(&mut self) {
+    pub fn restart(&mut self) -> DougResult<()> {
         let mut new_periods = self.periods.to_vec();
         // TODO(sbdchd): we shouldn't need this clone
         if let Some(period) = self.periods.clone().last() {
@@ -400,23 +400,25 @@ impl Doug {
                 let new_period = Period::new(&period.project);
                 new_periods.push(new_period);
                 self.periods = new_periods.to_vec();
-                self.save().unwrap();
-                return println!("Tracking last running project: {}", period.project.blue());
+                self.save()?;
+                println!("Tracking last running project: {}", period.project.blue());
+                return Ok(())
             } else {
                 let message = format!(
                     "No project to restart. Project {} is being tracked",
                     period.project
                 );
-                eprintln!("Error: {}", message.red());
-                return eprintln!(
+                let mut error = format!("Error: {}", message.red());
+                error.push_str(format!(
                     "Try stopping your current project with {} first.",
                     "stop".blue()
-                );
+                ).as_str());
+                return Err(error);
             }
         }
-        eprintln!("Error: {}", "No previous project to restart".red());
+        Err(format!("Error: {}", "No previous project to restart".red()))
     }
-    pub fn log(&self) {
+    pub fn log(&self) -> DougResult<()> {
         let mut days: HashMap<Date<chrono::Local>, Vec<Period>> = HashMap::new();
 
         // organize periods by day
@@ -432,7 +434,7 @@ impl Doug {
         days.sort_by_key(|&(a, ref _b)| a);
 
         // count the total time tracker per day
-        for &(ref date, ref day) in &days {
+        for (date, day) in &days {
             let d = day.into_iter().fold(Duration::zero(), |acc, x| {
                 acc + (x
                     .end_time
@@ -484,24 +486,26 @@ impl Doug {
                 }
             }
         }
+        Ok(())
     }
 
-    pub fn cancel(&mut self) {
+    pub fn cancel(&mut self) -> DougResult<()> {
         if let Some(period) = self.periods.pop() {
             if period.end_time.is_none() {
-                self.save().unwrap();
+                self.save()?;
                 let diff = Utc::now().signed_duration_since(period.start_time);
-                return println!(
+                println!(
                     "Canceled project {}, started {} ago",
                     period.project.blue(),
                     format_duration(diff)
                 );
+                return Ok(());
             }
         }
-        eprintln!("Error: {}", "No project started".red());
+        Err(format!("Error: {}", "No project started".red()))
     }
 
-    pub fn stop(&mut self) {
+    pub fn stop(&mut self) -> DougResult<()> {
         if let Some(mut period) = self.periods.pop() {
             if period.end_time.is_none() {
                 period.end_time = Some(Utc::now());
@@ -512,10 +516,10 @@ impl Doug {
                     format_duration(diff)
                 );
                 self.periods.push(period);
-                return self.save().unwrap();
+                return self.save();
             }
         }
-        eprintln!("Error: {}", "No project started.".red());
+        Err(format!("Error: {}", "No project started.".red()))
     }
 
     /// Retrieve last active (including current) period
@@ -523,21 +527,29 @@ impl Doug {
         self.periods.last_mut()
     }
 
-    pub fn edit(&mut self, start: Option<&str>, end: Option<&str>) {
+    pub fn edit(&mut self, start: Option<&str>, end: Option<&str>) -> DougResult<()> {
         if let Some(start) = start {
             match parse_date_string(start, Local::now(), Dialect::Us) {
                 Ok(x) => {
                     {
-                        let period = self.last_period().expect("no period to edit");
+                        let period = match self.last_period() {
+                            Some(x) => x,
+                            None => {
+                                return Err("no period to edit".to_string())
+                            }
+                        };
                         period.start_time = x.with_timezone(&Utc);
                     }
-                    self.save().unwrap();
-                    println!("{}", self.clone().last_period().unwrap());
-                    exit(0)
+                    self.save()?;
+                    if let Some(last_period) = self.clone().last_period() {
+                        println!("{}", last_period);
+                        Ok(())
+                    } else {
+                        Err("Error: Couldn't find last period.".to_string())
+                    }
                 }
                 Err(_) => {
-                    eprintln!("Couldn't parse date {}", start);
-                    exit(1)
+                    Err(format!("Couldn't parse date {}", start))
                 }
             };
         }
@@ -545,33 +557,46 @@ impl Doug {
             match parse_date_string(end, Local::now(), Dialect::Us) {
                 Ok(x) => {
                     {
-                        let period = self.last_period().expect("no period to edit");
+                        let period = match self.last_period() {
+                            Some(x) => x,
+                            None => {
+                                return Err("no period to edit".to_string())
+                            }
+                        };
                         period.end_time = Some(x.with_timezone(&Utc));
                     }
-                    self.save().unwrap();
-                    println!("{}", self.clone().last_period().unwrap());
-                    exit(0)
+                    self.save()?;
+                    if let Some(last_period) = self.clone().last_period() {
+                        println!("{}", last_period);
+                        Ok(())
+                    } else {
+                        Err("Error: Couldn't find last period.".to_string())
+                    }
                 }
                 Err(_) => {
-                    eprintln!("Couldn't parse date {}", end);
-                    exit(1)
+                    Err(format!("Couldn't parse date {}", end))
                 }
             };
         }
-        let path = Path::new(
-            &env::var("HOME").expect("Failed to find home directory from environment 'HOME'"),
-        ).join(".doug/periods.json");
-        println!("File: {}", path.to_str().unwrap().blue());
+        let home = match env::var("HOME") {
+            Ok(x) => x,
+            Err(_) => {
+                return Err("Failed to find home directory from environment 'HOME'".to_string())
+            }
+        };
+        let path = Path::new(&home).join(".doug/periods.json");
+        println!("File: {}", path.to_str().unwrap_or("none").blue());
         if let Some(editor) = env::var_os("EDITOR") {
             let mut edit = Command::new(editor);
             edit.arg(path.clone());
             let status = edit.status();
             if status.is_err() {
-                eprintln!("Error: {}", "Problem with editing.".red());
+                return Err(format!("Error: {}", "Problem with editing.".red()));
             }
         } else {
-            eprintln!("Error: {}", "Couldn't open editor".red());
+            return Err(format!("Error: {}", "Couldn't open editor".red()));
         }
+        Ok(())
     }
 }
 

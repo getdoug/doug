@@ -165,7 +165,7 @@ fn main() {
             doug.start(matches.value_of("project").unwrap());
         } else {
             // Restart last project if not argument is provided
-            doug.restart()
+            doug.restart().unwrap()
         }
     } else if let Some(matches) = matches.subcommand_matches("amend") {
         if matches.is_present("project") {
@@ -209,13 +209,13 @@ fn main() {
             }
         }
     } else if let Some(matches) = matches.subcommand_matches("edit") {
-        doug.edit(matches.value_of("start"), matches.value_of("end"))
+        doug.edit(matches.value_of("start"), matches.value_of("end")).unwrap()
     } else {
         match matches.subcommand_name() {
-            Some("stop") => doug.stop(),
-            Some("cancel") => doug.cancel(),
-            Some("restart") => doug.restart(),
-            Some("log") => doug.log(),
+            Some("stop") => doug.stop().unwrap(),
+            Some("cancel") => doug.cancel().unwrap(),
+            Some("restart") => doug.restart().unwrap(),
+            Some("log") => doug.log().unwrap(),
             _ => {}
         }
     }
