@@ -109,11 +109,11 @@ impl Doug {
         }
     }
 
-    pub fn status(&self, simple_name: bool, simple_time: bool) {
+    pub fn status(&self, simple_name: bool, simple_time: bool) -> Result<(), &str> {
         if let Some(period) = &self.periods.last() {
             if period.end_time.is_none() {
                 let diff = Utc::now().signed_duration_since(period.start_time);
-                return if simple_name {
+                return Ok(if simple_name {
                     println!("{}", period.project)
                 } else if simple_time {
                     println!("{}", format_duration(diff))
@@ -124,54 +124,45 @@ impl Doug {
                         format_duration(diff),
                         format_datetime(period.start_time).blue()
                     )
-                };
+                });
             }
         }
         if !(simple_name || simple_time) {
-            eprintln!("No running project");
+            Err("No running project")
+        } else {
+            Ok(())
         }
     }
 
     pub fn save(&self) -> Result<(), &str> {
         let serialized = match serde_json::to_string(&self.periods) {
             Ok(x) => x,
-            Err(_) => {
-                return Err("Couldn't serialize data to string")
-            }
+            Err(_) => return Err("Couldn't serialize data to string"),
         };
         let home = match env::var("HOME") {
             Ok(x) => x,
-            Err(_) => {
-                return Err("Couldn't find `HOME`")
-            }
+            Err(_) => return Err("Couldn't find `HOME`"),
         };
-        let data_file = Path::new(
-            &home,
-        ).join(".doug/periods.json");
+        let data_file = Path::new(&home).join(".doug/periods.json");
         let mut data_file_backup = data_file.clone();
         data_file_backup.set_extension("json-backup");
         match fs::copy(&data_file, &data_file_backup) {
-            Ok(_) => {},
-            Err(_) => {
-                return Err("Couldn't create backup file")
-            } 
+            Ok(_) => {}
+            Err(_) => return Err("Couldn't create backup file"),
         };
         let mut file = match OpenOptions::new()
             .create(true)
             .write(true)
             .truncate(true)
-            .open(&data_file) {
-                Ok(x) => x,
-                Err(_) => {
-                    return Err("Couldn't open file for saving period.")
-                }
+            .open(&data_file)
+        {
+            Ok(x) => x,
+            Err(_) => return Err("Couldn't open file for saving period."),
         };
 
         match file.write_all(serialized.as_bytes()) {
             Ok(_) => Ok(()),
-            Err(_) => {
-                return Err("Couldn't write serialized data to file")
-            }
+            Err(_) => return Err("Couldn't write serialized data to file"),
         }
     }
 
