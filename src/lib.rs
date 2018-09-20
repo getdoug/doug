@@ -1,4 +1,5 @@
 extern crate chrono;
+extern crate chrono_english;
 extern crate clap;
 extern crate colored;
 extern crate serde;
@@ -16,8 +17,10 @@ use std::process::exit;
 use std::process::Command;
 
 use chrono::{Date, DateTime, Duration, Local, NaiveDate, TimeZone, Utc};
+use chrono_english::{parse_date_string, Dialect};
 use colored::*;
 use serde_json::Error;
+use std::fmt;
 
 #[derive(Eq, PartialEq, Serialize, Deserialize, Debug, Clone)]
 pub struct Period {
@@ -36,7 +39,30 @@ impl Period {
     }
 }
 
-#[derive(Default)]
+impl fmt::Display for Period {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let end_time = match self.end_time {
+            Some(x) => x,
+            None => Utc::now(),
+        };
+        let diff = end_time.signed_duration_since(self.start_time);
+        let start_time = format_time(self.start_time);
+        let end_time = if self.end_time.is_some() {
+            format_time(end_time)
+        } else {
+            "present".to_string()
+        };
+        write!(
+            f,
+            "{} to {} {}",
+            start_time,
+            end_time,
+            format_duration(diff)
+        )
+    }
+}
+
+#[derive(Default, Clone)]
 pub struct Doug {
     periods: Vec<Period>,
 }
@@ -96,7 +122,7 @@ impl Doug {
         }
     }
 
-    pub fn save(self) {
+    pub fn save(&self) {
         let serialized =
             serde_json::to_string(&self.periods).expect("Couldn't serialize data to string");
         let data_file = Path::new(
@@ -459,7 +485,46 @@ impl Doug {
         eprintln!("Error: {}", "No project started.".red());
     }
 
-    pub fn edit(self) {
+    /// Retrieve last active (including current) period
+    fn last_period(&mut self) -> Option<&mut Period> {
+        self.periods.last_mut()
+    }
+
+    pub fn edit(&mut self, start: Option<&str>, end: Option<&str>) {
+        if let Some(start) = start {
+            match parse_date_string(start, Local::now(), Dialect::Us) {
+                Ok(x) => {
+                    {
+                        let period = self.last_period().expect("no period to edit");
+                        period.start_time = x.with_timezone(&Utc);
+                    }
+                    self.save();
+                    println!("{}", self.clone().last_period().unwrap());
+                    exit(0)
+                }
+                Err(_) => {
+                    eprintln!("Couldn't parse date {}", start);
+                    exit(1)
+                }
+            };
+        }
+        if let Some(end) = end {
+            match parse_date_string(end, Local::now(), Dialect::Us) {
+                Ok(x) => {
+                    {
+                        let period = self.last_period().expect("no period to edit");
+                        period.end_time = Some(x.with_timezone(&Utc));
+                    }
+                    self.save();
+                    println!("{}", self.clone().last_period().unwrap());
+                    exit(0)
+                }
+                Err(_) => {
+                    eprintln!("Couldn't parse date {}", end);
+                    exit(1)
+                }
+            };
+        }
         let path = Path::new(
             &env::var("HOME").expect("Failed to find home directory from environment 'HOME'"),
         ).join(".doug/periods.json");

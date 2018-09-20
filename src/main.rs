@@ -107,7 +107,21 @@ fn main() {
                             .required(true),
                     ),
             ).subcommand(
-                SubCommand::with_name("edit").about("Edit last frame or currently running frame"),
+                SubCommand::with_name("edit")
+                    .about("Edit last frame or currently running frame")
+                    .arg(
+                        Arg::with_name("start")
+                            .short("s")
+                            .long("start")
+                            .help("starting date")
+                            .takes_value(true),
+                    ).arg(
+                        Arg::with_name("end")
+                            .short("e")
+                            .long("end")
+                            .help("ending date")
+                            .takes_value(true),
+                    ),
             ).subcommand(
                 SubCommand::with_name("generate-completions")
                     .about("Generate completions")
@@ -133,7 +147,7 @@ fn main() {
 
     let matches = cli.clone().get_matches();
 
-    let doug = Doug::new();
+    let mut doug = Doug::new();
 
     if !atty::is(Stream::Stdout) {
         colored::control::set_override(false);
@@ -187,13 +201,16 @@ fn main() {
                 _ => eprintln!("Invalid option"),
             }
         }
-    } else {
+    } else if let Some(matches) = matches.subcommand_matches("edit") {
+        doug.edit(matches.value_of("start"), matches.value_of("end"))
+    }
+
+    else {
         match matches.subcommand_name() {
             Some("stop") => doug.stop(),
             Some("cancel") => doug.cancel(),
             Some("restart") => doug.restart(),
             Some("log") => doug.log(),
-            Some("edit") => doug.edit(),
             _ => {}
         }
     }
