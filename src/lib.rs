@@ -535,7 +535,7 @@ impl Doug {
                         let period = match self.last_period() {
                             Some(x) => x,
                             None => {
-                                return Err("no period to edit".to_string())
+                                return Err("no period to edit".to_string());
                             }
                         };
                         period.start_time = x.with_timezone(&Utc);
@@ -543,13 +543,13 @@ impl Doug {
                     self.save()?;
                     if let Some(last_period) = self.clone().last_period() {
                         println!("{}", last_period);
-                        Ok(())
+                        return Ok(());
                     } else {
-                        Err("Error: Couldn't find last period.".to_string())
+                        return Err("Error: Couldn't find last period.".to_string());
                     }
                 }
                 Err(_) => {
-                    Err(format!("Couldn't parse date {}", start))
+                    return Err(format!("Couldn't parse date {}", start));
                 }
             };
         }
@@ -568,13 +568,13 @@ impl Doug {
                     self.save()?;
                     if let Some(last_period) = self.clone().last_period() {
                         println!("{}", last_period);
-                        Ok(())
+                        return Ok(());
                     } else {
-                        Err("Error: Couldn't find last period.".to_string())
+                        return Err("Error: Couldn't find last period.".to_string());
                     }
                 }
                 Err(_) => {
-                    Err(format!("Couldn't parse date {}", end))
+                    return Err(format!("Couldn't parse date {}", end));
                 }
             };
         }
