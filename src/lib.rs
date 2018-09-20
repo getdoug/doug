@@ -169,17 +169,20 @@ impl Doug {
         }
     }
 
-    pub fn start(mut self, project_name: &str) {
+    pub fn start(&mut self, project_name: &str) -> DougResult<()> {
         // TODO(chdsbd): Replace print with Result<String, &str>
         if !self.periods.is_empty() {
             if let Some(period) = self.periods.last_mut() {
                 if period.end_time.is_none() {
                     let message = format!("project {} is being tracked", period.project);
-                    eprintln!("Error: {}", message.red());
-                    return eprintln!(
-                        "Try stopping your current project with {} first.",
-                        "stop".blue()
+                    let mut error = format!("Error: {}", message.red());
+                    error.push_str(
+                        format!(
+                            "Try stopping your current project with {} first.",
+                            "stop".blue()
+                        ).as_str(),
                     );
+                    return Err(error);
                 }
             }
         }
@@ -190,10 +193,10 @@ impl Doug {
             format_time(current_period.start_time)
         );
         self.periods.push(current_period);
-        self.save().unwrap();
+        self.save()
     }
 
-    pub fn amend(mut self, project_name: &str) {
+    pub fn amend(&mut self, project_name: &str) -> DougResult<()> {
         if let Some(mut period) = self.periods.pop() {
             if period.end_time.is_none() {
                 let old_name = period.project.clone();
@@ -204,21 +207,21 @@ impl Doug {
                     new = period.project.green()
                 );
                 self.periods.push(period);
-                return self.save().unwrap();
+                return self.save();
             }
         }
-        eprintln!("Error: {}", "No project started".red());
+        Err(format!("Error: {}", "No project started".red()))
     }
 
     pub fn report(
-        self,
+        &self,
         (past_year, past_year_occur): (bool, i32),
         (past_month, past_month_occur): (bool, i32),
         (past_week, past_week_occur): (bool, i32),
         (past_day, past_day_occur): (bool, i32),
         from_date: Option<&str>,
         to_date: Option<&str>,
-    ) {
+    ) -> DougResult<()> {
         let mut days: HashMap<String, Vec<Period>> = HashMap::new();
         let mut start_date = Utc::today().with_timezone(&Local);
         let mut end_date = Utc
@@ -245,9 +248,9 @@ impl Doug {
                     from_date_parsed = Date::from_utc(result, offset);
                 }
                 Err(_error) => {
-                    eprintln!("Error: {}", "Invalid date format.".red());
-                    eprintln!("Required format: {}", "%Y-%m-%d".blue());
-                    exit(1)
+                    let mut error = format!("Error: {}", "Invalid date format.".red());
+                    error.push_str(format!("Required format: {}", "%Y-%m-%d".blue()).as_str());
+                    return Err(error);
                 }
             }
         }
@@ -257,15 +260,15 @@ impl Doug {
                     to_date_parsed = Date::from_utc(result, offset);
                 }
                 Err(_error) => {
-                    eprintln!("Error: {}", "Invalid date format.".red());
-                    eprintln!("Required format: {}", "%Y-%m-%d".blue());
-                    exit(1)
+                    let mut error = format!("Error: {}", "Invalid date format.".red());
+                    error.push_str(format!("Required format: {}", "%Y-%m-%d".blue()).as_str());
+                    return Err(error);
                 }
             }
         }
 
         // organize periods by project
-        for period in self.periods {
+        for period in &self.periods {
             days.entry(period.project.clone())
                 .or_insert_with(Vec::new)
                 .push(period.clone());
@@ -367,11 +370,12 @@ impl Doug {
                 dwidth = max_diff_len
             );
         }
+        Ok(())
     }
-    pub fn delete(mut self, project_name: &str) {
+    pub fn delete(&mut self, project_name: &str) -> DougResult<()> {
         let mut project_not_found = true;
         let mut filtered_periods = Vec::new();
-        for period in self.periods {
+        for period in &self.periods {
             if period.project == project_name {
                 project_not_found = false;
             } else {
@@ -379,15 +383,16 @@ impl Doug {
             }
         }
         if project_not_found {
-            eprintln!("Error: {}", "Project not found.".red());
+            Err(format!("Error: {}", "Project not found.".red()))
         } else {
             self.periods = filtered_periods;
-            self.save().unwrap();
+            self.save()?;
             println!("Deleted project {project}", project = project_name.blue());
+            Ok(())
         }
     }
 
-    pub fn restart(mut self) {
+    pub fn restart(&mut self) {
         let mut new_periods = self.periods.to_vec();
         // TODO(sbdchd): we shouldn't need this clone
         if let Some(period) = self.periods.clone().last() {
@@ -411,11 +416,11 @@ impl Doug {
         }
         eprintln!("Error: {}", "No previous project to restart".red());
     }
-    pub fn log(self) {
+    pub fn log(&self) {
         let mut days: HashMap<Date<chrono::Local>, Vec<Period>> = HashMap::new();
 
         // organize periods by day
-        for period in self.periods {
+        for period in &self.periods {
             let time = period.start_time.with_timezone(&Local).date();
             days.entry(time)
                 .or_insert_with(Vec::new)
@@ -481,7 +486,7 @@ impl Doug {
         }
     }
 
-    pub fn cancel(mut self) {
+    pub fn cancel(&mut self) {
         if let Some(period) = self.periods.pop() {
             if period.end_time.is_none() {
                 self.save().unwrap();
@@ -496,7 +501,7 @@ impl Doug {
         eprintln!("Error: {}", "No project started".red());
     }
 
-    pub fn stop(mut self) {
+    pub fn stop(&mut self) {
         if let Some(mut period) = self.periods.pop() {
             if period.end_time.is_none() {
                 period.end_time = Some(Utc::now());
