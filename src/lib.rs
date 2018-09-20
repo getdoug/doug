@@ -67,8 +67,10 @@ pub struct Doug {
     periods: Vec<Period>,
 }
 
+type DougResult<T> = Result<T, String>;
+
 impl Doug {
-    pub fn new() -> Result<Self, String> {
+    pub fn new() -> DougResult<Self> {
         let home_dir = match env::var("HOME") {
             Ok(x) => x,
             Err(_) => {
@@ -109,7 +111,8 @@ impl Doug {
         }
     }
 
-    pub fn status(&self, simple_name: bool, simple_time: bool) -> Result<(), &str> {
+    pub fn status(&self, simple_name: bool, simple_time: bool) -> DougResult<()> {
+        // TODO(chdsbd): Return status as String
         if let Some(period) = &self.periods.last() {
             if period.end_time.is_none() {
                 let diff = Utc::now().signed_duration_since(period.start_time);
@@ -128,27 +131,27 @@ impl Doug {
             }
         }
         if !(simple_name || simple_time) {
-            Err("No running project")
+            Err("No running project".to_string())
         } else {
             Ok(())
         }
     }
 
-    pub fn save(&self) -> Result<(), &str> {
+    pub fn save(&self) -> DougResult<()> {
         let serialized = match serde_json::to_string(&self.periods) {
             Ok(x) => x,
-            Err(_) => return Err("Couldn't serialize data to string"),
+            Err(_) => return Err("Couldn't serialize data to string".to_string()),
         };
         let home = match env::var("HOME") {
             Ok(x) => x,
-            Err(_) => return Err("Couldn't find `HOME`"),
+            Err(_) => return Err("Couldn't find `HOME`".to_string()),
         };
         let data_file = Path::new(&home).join(".doug/periods.json");
         let mut data_file_backup = data_file.clone();
         data_file_backup.set_extension("json-backup");
         match fs::copy(&data_file, &data_file_backup) {
             Ok(_) => {}
-            Err(_) => return Err("Couldn't create backup file"),
+            Err(_) => return Err("Couldn't create backup file".to_string()),
         };
         let mut file = match OpenOptions::new()
             .create(true)
@@ -157,16 +160,17 @@ impl Doug {
             .open(&data_file)
         {
             Ok(x) => x,
-            Err(_) => return Err("Couldn't open file for saving period."),
+            Err(_) => return Err("Couldn't open file for saving period.".to_string()),
         };
 
         match file.write_all(serialized.as_bytes()) {
             Ok(_) => Ok(()),
-            Err(_) => return Err("Couldn't write serialized data to file"),
+            Err(_) => return Err("Couldn't write serialized data to file".to_string()),
         }
     }
 
     pub fn start(mut self, project_name: &str) {
+        // TODO(chdsbd): Replace print with Result<String, &str>
         if !self.periods.is_empty() {
             if let Some(period) = self.periods.last_mut() {
                 if period.end_time.is_none() {
