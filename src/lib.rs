@@ -132,24 +132,47 @@ impl Doug {
         }
     }
 
-    pub fn save(&self) {
-        let serialized =
-            serde_json::to_string(&self.periods).expect("Couldn't serialize data to string");
+    pub fn save(&self) -> Result<(), &str> {
+        let serialized = match serde_json::to_string(&self.periods) {
+            Ok(x) => x,
+            Err(_) => {
+                return Err("Couldn't serialize data to string")
+            }
+        };
+        let home = match env::var("HOME") {
+            Ok(x) => x,
+            Err(_) => {
+                return Err("Couldn't find `HOME`")
+            }
+        };
         let data_file = Path::new(
-            &env::var("HOME").expect("Failed to find home directory from environment 'HOME'"),
+            &home,
         ).join(".doug/periods.json");
         let mut data_file_backup = data_file.clone();
         data_file_backup.set_extension("json-backup");
-        fs::copy(&data_file, &data_file_backup).expect("Couldn't create backup file");
-        let mut file = OpenOptions::new()
+        match fs::copy(&data_file, &data_file_backup) {
+            Ok(_) => {},
+            Err(_) => {
+                return Err("Couldn't create backup file")
+            } 
+        };
+        let mut file = match OpenOptions::new()
             .create(true)
             .write(true)
             .truncate(true)
-            .open(&data_file)
-            .expect("Couldn't open file for saving period.");
+            .open(&data_file) {
+                Ok(x) => x,
+                Err(_) => {
+                    return Err("Couldn't open file for saving period.")
+                }
+        };
 
-        file.write_all(serialized.as_bytes())
-            .expect("Couldn't write serialized data to file");
+        match file.write_all(serialized.as_bytes()) {
+            Ok(_) => Ok(()),
+            Err(_) => {
+                return Err("Couldn't write serialized data to file")
+            }
+        }
     }
 
     pub fn start(mut self, project_name: &str) {
@@ -172,7 +195,7 @@ impl Doug {
             format_time(current_period.start_time)
         );
         self.periods.push(current_period);
-        self.save();
+        self.save().unwrap();
     }
 
     pub fn amend(mut self, project_name: &str) {
@@ -186,7 +209,7 @@ impl Doug {
                     new = period.project.green()
                 );
                 self.periods.push(period);
-                return self.save();
+                return self.save().unwrap();
             }
         }
         eprintln!("Error: {}", "No project started".red());
@@ -364,7 +387,7 @@ impl Doug {
             eprintln!("Error: {}", "Project not found.".red());
         } else {
             self.periods = filtered_periods;
-            self.save();
+            self.save().unwrap();
             println!("Deleted project {project}", project = project_name.blue());
         }
     }
@@ -377,7 +400,7 @@ impl Doug {
                 let new_period = Period::new(&period.project);
                 new_periods.push(new_period);
                 self.periods = new_periods.to_vec();
-                self.save();
+                self.save().unwrap();
                 return println!("Tracking last running project: {}", period.project.blue());
             } else {
                 let message = format!(
@@ -466,7 +489,7 @@ impl Doug {
     pub fn cancel(mut self) {
         if let Some(period) = self.periods.pop() {
             if period.end_time.is_none() {
-                self.save();
+                self.save().unwrap();
                 let diff = Utc::now().signed_duration_since(period.start_time);
                 return println!(
                     "Canceled project {}, started {} ago",
@@ -489,7 +512,7 @@ impl Doug {
                     format_duration(diff)
                 );
                 self.periods.push(period);
-                return self.save();
+                return self.save().unwrap();
             }
         }
         eprintln!("Error: {}", "No project started.".red());
@@ -508,7 +531,7 @@ impl Doug {
                         let period = self.last_period().expect("no period to edit");
                         period.start_time = x.with_timezone(&Utc);
                     }
-                    self.save();
+                    self.save().unwrap();
                     println!("{}", self.clone().last_period().unwrap());
                     exit(0)
                 }
@@ -525,7 +548,7 @@ impl Doug {
                         let period = self.last_period().expect("no period to edit");
                         period.end_time = Some(x.with_timezone(&Utc));
                     }
-                    self.save();
+                    self.save().unwrap();
                     println!("{}", self.clone().last_period().unwrap());
                     exit(0)
                 }
