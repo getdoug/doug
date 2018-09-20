@@ -13,7 +13,6 @@ use std::fs;
 use std::fs::{DirBuilder, OpenOptions};
 use std::io::Write;
 use std::path::{Path, PathBuf};
-use std::process::exit;
 use std::process::Command;
 
 use chrono::{Date, DateTime, Duration, Local, NaiveDate, TimeZone, Utc};
@@ -57,7 +56,7 @@ impl fmt::Display for Period {
             "{} to {} {}",
             start_time,
             end_time,
-            format_duration(diff)
+            format_duration(diff).purple()
         )
     }
 }
@@ -402,17 +401,19 @@ impl Doug {
                 self.periods = new_periods.to_vec();
                 self.save()?;
                 println!("Tracking last running project: {}", period.project.blue());
-                return Ok(())
+                return Ok(());
             } else {
                 let message = format!(
                     "No project to restart. Project {} is being tracked",
                     period.project
                 );
                 let mut error = format!("Error: {}", message.red());
-                error.push_str(format!(
-                    "Try stopping your current project with {} first.",
-                    "stop".blue()
-                ).as_str());
+                error.push_str(
+                    format!(
+                        "Try stopping your current project with {} first.",
+                        "stop".blue()
+                    ).as_str(),
+                );
                 return Err(error);
             }
         }
@@ -559,9 +560,7 @@ impl Doug {
                     {
                         let period = match self.last_period() {
                             Some(x) => x,
-                            None => {
-                                return Err("no period to edit".to_string())
-                            }
+                            None => return Err("no period to edit".to_string()),
                         };
                         period.end_time = Some(x.with_timezone(&Utc));
                     }

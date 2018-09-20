@@ -13,6 +13,7 @@ use std::io::stdout;
 
 use atty::Stream;
 use clap::{App, AppSettings, Arg, Shell, SubCommand};
+use colored::Colorize;
 
 use doug::*;
 use std::process;
@@ -169,7 +170,7 @@ fn main() {
         }
     } else if let Some(matches) = matches.subcommand_matches("amend") {
         if let Some(project) = matches.value_of("project") {
-                doug.amend(project)
+            doug.amend(project)
         } else {
             Err("Missing project name".to_string())
         }
@@ -204,15 +205,15 @@ fn main() {
                 Some("bash") => {
                     cli.gen_completions_to("doug", Shell::Bash, &mut stdout());
                     Ok(())
-                },
+                }
                 Some("zsh") => {
                     cli.gen_completions_to("doug", Shell::Zsh, &mut stdout());
                     Ok(())
-                },
+                }
                 Some("fish") => {
                     cli.gen_completions_to("doug", Shell::Fish, &mut stdout());
                     Ok(())
-                },
+                }
                 Some("powershell") => {
                     cli.gen_completions_to("doug", Shell::PowerShell, &mut stdout());
                     Ok(())
@@ -230,18 +231,15 @@ fn main() {
             Some("cancel") => doug.cancel(),
             Some("restart") => doug.restart(),
             Some("log") => doug.log(),
-            _ => Ok(())
+            _ => Ok(()),
         }
     };
 
     match results {
-        Ok(x) => {
-            // println!("{}", x);
-            process::exit(0)
-        },
+        Ok(_) => process::exit(0),
         Err(e) => {
-            eprintln!("{}", e);
-            process::exit(0)
+            eprintln!("{} {}", "Error:".red(), e);
+            process::exit(1)
         }
     }
 }
