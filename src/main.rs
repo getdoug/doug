@@ -161,7 +161,7 @@ fn main() {
         }
     };
 
-    let results: Result<(), String> = match matches.subcommand() {
+    let results = match matches.subcommand() {
         ("start", Some(matches)) => match matches.value_of("project") {
             Some(project) => doug.start(project),
             // Restart last project if not argument is provided
@@ -199,19 +199,19 @@ fn main() {
         ("generate-completions", Some(matches)) => match matches.value_of("shell") {
             Some("bash") => {
                 cli.gen_completions_to("doug", Shell::Bash, &mut stdout());
-                Ok(())
+                Ok(None)
             }
             Some("zsh") => {
                 cli.gen_completions_to("doug", Shell::Zsh, &mut stdout());
-                Ok(())
+                Ok(None)
             }
             Some("fish") => {
                 cli.gen_completions_to("doug", Shell::Fish, &mut stdout());
-                Ok(())
+                Ok(None)
             }
             Some("powershell") => {
                 cli.gen_completions_to("doug", Shell::PowerShell, &mut stdout());
-                Ok(())
+                Ok(None)
             }
             _ => Err("Invalid option".to_string()),
         },
@@ -220,11 +220,14 @@ fn main() {
         ("cancel", Some(_)) => doug.cancel(),
         ("restart", Some(_)) => doug.restart(),
         ("log", Some(_)) => doug.log(),
-        (_, Some(_)) | (_, None) => Err("No subcommand provided".to_string()),
+        (_, Some(_)) | (_, None) => unreachable!(),
     };
 
     match results {
-        Ok(_) => process::exit(0),
+        Ok(m) => match m {
+            Some(m) => print!("{}", m),
+            None => {}
+        },
         Err(e) => {
             eprintln!("{} {}", "Error:".red(), e);
             process::exit(1)

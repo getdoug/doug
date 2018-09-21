@@ -66,10 +66,10 @@ pub struct Doug {
     periods: Vec<Period>,
 }
 
-type DougResult<T> = Result<T, String>;
+type DougResult = Result<Option<String>, String>;
 
 impl Doug {
-    pub fn new() -> DougResult<Self> {
+    pub fn new() -> Result<Self, String> {
         let home_dir = match env::var("HOME") {
             Ok(x) => x,
             Err(_) => {
@@ -81,7 +81,7 @@ impl Doug {
         // create .doug directory
         match DirBuilder::new().recursive(true).create(&folder) {
             Ok(_) => {}
-            Err(_) => return Err(format!("Couldn't create data directory: {:?}", folder)),
+            Err(_) => return Err(format!("Couldn't create data directory: {:?}\n", folder)),
         }
         // create data file
         let data_file_path = folder.as_path().join("periods.json");
@@ -93,7 +93,7 @@ impl Doug {
         {
             Ok(x) => x,
             Err(_) => {
-                return Err(format!("Couldn't open datafile: {:?}", data_file_path));
+                return Err(format!("Couldn't open datafile: {:?}\n", data_file_path));
             }
         };
 
@@ -106,37 +106,37 @@ impl Doug {
             Err(ref error) if error.is_eof() => Ok(Doug {
                 periods: Vec::new(),
             }),
-            Err(error) => Err(format!("There was a serialization issue: {:?}", error)),
+            Err(error) => Err(format!("There was a serialization issue: {:?}\n", error)),
         }
     }
 
-    pub fn status(&self, simple_name: bool, simple_time: bool) -> DougResult<()> {
+    pub fn status(&self, simple_name: bool, simple_time: bool) -> DougResult {
         // TODO(chdsbd): Return status as String
         if let Some(period) = &self.periods.last() {
             if period.end_time.is_none() {
                 let diff = Utc::now().signed_duration_since(period.start_time);
-                return Ok(if simple_name {
-                    println!("{}", period.project)
+                return Ok(Some(if simple_name {
+                    format!("{}\n", period.project)
                 } else if simple_time {
-                    println!("{}", format_duration(diff))
+                    format!("{}\n", format_duration(diff))
                 } else {
-                    println!(
-                        "Project {} started {} ago ({})",
+                    format!(
+                        "Project {} started {} ago ({})\n",
                         period.project.magenta(),
                         format_duration(diff),
                         format_datetime(period.start_time).blue()
                     )
-                });
+                }));
             }
         }
         if !(simple_name || simple_time) {
             Err("No running project".to_string())
         } else {
-            Ok(())
+            Ok(None)
         }
     }
 
-    pub fn save(&self) -> DougResult<()> {
+    pub fn save(&self) -> DougResult {
         let serialized = match serde_json::to_string(&self.periods) {
             Ok(x) => x,
             Err(_) => return Err("Couldn't serialize data to string".to_string()),
@@ -163,18 +163,17 @@ impl Doug {
         };
 
         match file.write_all(serialized.as_bytes()) {
-            Ok(_) => Ok(()),
+            Ok(_) => Ok(None),
             Err(_) => return Err("Couldn't write serialized data to file".to_string()),
         }
     }
 
-    pub fn start(&mut self, project_name: &str) -> DougResult<()> {
+    pub fn start(&mut self, project_name: &str) -> DougResult {
         // TODO(chdsbd): Replace print with Result<String, &str>
         if !self.periods.is_empty() {
             if let Some(period) = self.periods.last_mut() {
                 if period.end_time.is_none() {
-                    let message = format!("project {} is being tracked", period.project);
-                    let mut error = format!("Error: {}", message.red());
+                    let mut error = format!("project {} is being tracked\n", period.project);
                     error.push_str(
                         format!(
                             "Try stopping your current project with {} first.",
@@ -186,27 +185,30 @@ impl Doug {
             }
         }
         let current_period = Period::new(project_name);
-        println!(
-            "Started tracking project {} at {}",
+        let message = format!(
+            "Started tracking project {} at {}\n",
             current_period.project.blue(),
             format_time(current_period.start_time)
         );
         self.periods.push(current_period);
-        self.save()
+        self.save()?;
+        Ok(Some(message))
     }
 
-    pub fn amend(&mut self, project_name: &str) -> DougResult<()> {
+    pub fn amend(&mut self, project_name: &str) -> DougResult {
         if let Some(mut period) = self.periods.pop() {
             if period.end_time.is_none() {
                 let old_name = period.project.clone();
                 period.project = String::from(project_name);
-                println!(
-                    "Renamed tracking project {old} -> {new}",
+                let message = format!(
+                    "Renamed tracking project {old} -> {new}\n",
                     old = old_name.red(),
                     new = period.project.green()
                 );
                 self.periods.push(period);
-                return self.save();
+                self.save()?;
+                return Ok(Some(message));
+
             }
         }
         Err(format!("Error: {}", "No project started".red()))
@@ -220,7 +222,7 @@ impl Doug {
         (past_day, past_day_occur): (bool, i32),
         from_date: Option<&str>,
         to_date: Option<&str>,
-    ) -> DougResult<()> {
+    ) -> DougResult {
         let mut days: HashMap<String, Vec<Period>> = HashMap::new();
         let mut start_date = Utc::today().with_timezone(&Local);
         let mut end_date = Utc
@@ -247,7 +249,7 @@ impl Doug {
                     from_date_parsed = Date::from_utc(result, offset);
                 }
                 Err(_error) => {
-                    let mut error = format!("Error: {}", "Invalid date format.".red());
+                    let mut error = format!("Error: {}", "Invalid date format.\n".red());
                     error.push_str(format!("Required format: {}", "%Y-%m-%d".blue()).as_str());
                     return Err(error);
                 }
@@ -259,7 +261,7 @@ impl Doug {
                     to_date_parsed = Date::from_utc(result, offset);
                 }
                 Err(_error) => {
-                    let mut error = format!("Error: {}", "Invalid date format.".red());
+                    let mut error = format!("Error: {}", "Invalid date format.\n".red());
                     error.push_str(format!("Required format: {}", "%Y-%m-%d".blue()).as_str());
                     return Err(error);
                 }
@@ -354,24 +356,24 @@ impl Doug {
             }
             results.push((project.clone(), duration));
         }
-        println!(
-            "{start} -> {end}",
+        let mut message = format!(
+            "{start} -> {end}\n",
             start = start_date.format("%A %-d %B %Y").to_string().blue(),
             end = end_date.format("%A %-d %B %Y").to_string().blue()
         );
         results.sort();
         for &(ref project, ref duration) in &results {
-            println!(
-                "{project:pwidth$} {duration:>dwidth$}",
+            message.push_str(format!(
+                "{project:pwidth$} {duration:>dwidth$}\n",
                 project = project.green(),
                 duration = format_duration(*duration).bold(),
                 pwidth = max_proj_len,
                 dwidth = max_diff_len
-            );
+            ).as_str());
         }
-        Ok(())
+        Ok(Some(message))
     }
-    pub fn delete(&mut self, project_name: &str) -> DougResult<()> {
+    pub fn delete(&mut self, project_name: &str) -> DougResult {
         let mut project_not_found = true;
         let mut filtered_periods = Vec::new();
         for period in &self.periods {
@@ -382,16 +384,15 @@ impl Doug {
             }
         }
         if project_not_found {
-            Err(format!("Error: {}", "Project not found.".red()))
+            Err(format!("Error: {}", "Project not found.\n".red()))
         } else {
             self.periods = filtered_periods;
             self.save()?;
-            println!("Deleted project {project}", project = project_name.blue());
-            Ok(())
+            Ok(Some(format!("Deleted project {project}\n", project = project_name.blue())))
         }
     }
 
-    pub fn restart(&mut self) -> DougResult<()> {
+    pub fn restart(&mut self) -> DougResult {
         let mut new_periods = self.periods.to_vec();
         // TODO(sbdchd): we shouldn't need this clone
         if let Some(period) = self.periods.clone().last() {
@@ -400,14 +401,12 @@ impl Doug {
                 new_periods.push(new_period);
                 self.periods = new_periods.to_vec();
                 self.save()?;
-                println!("Tracking last running project: {}", period.project.blue());
-                return Ok(());
+                return Ok(Some(format!("Tracking last running project: {}", period.project.blue())));
             } else {
-                let message = format!(
-                    "No project to restart. Project {} is being tracked",
+                let mut error = format!(
+                    "No project to restart. Project {} is being tracked\n",
                     period.project
                 );
-                let mut error = format!("Error: {}", message.red());
                 error.push_str(
                     format!(
                         "Try stopping your current project with {} first.",
@@ -419,7 +418,7 @@ impl Doug {
         }
         Err(format!("Error: {}", "No previous project to restart".red()))
     }
-    pub fn log(&self) -> DougResult<()> {
+    pub fn log(&self) -> DougResult {
         let mut days: HashMap<Date<chrono::Local>, Vec<Period>> = HashMap::new();
 
         // organize periods by day
@@ -433,7 +432,7 @@ impl Doug {
         // order days
         let mut days: Vec<(Date<chrono::Local>, Vec<Period>)> = days.into_iter().collect();
         days.sort_by_key(|&(a, ref _b)| a);
-
+        let mut message = String::new();
         // count the total time tracker per day
         for (date, day) in &days {
             let d = day.into_iter().fold(Duration::zero(), |acc, x| {
@@ -442,15 +441,15 @@ impl Doug {
                     .unwrap_or_else(Utc::now)
                     .signed_duration_since(x.start_time))
             });
-            println!(
-                "{date} ({duration})",
+            message.push_str(format!(
+                "{date} ({duration})\n",
                 date = date
                     .with_timezone(&Local)
                     .format("%A %-d %B %Y")
                     .to_string()
                     .green(),
                 duration = format_duration(d).bold()
-            );
+            ).as_str());
             // find time tracker per period
             let mut project_periods = Vec::new();
             for period in day.iter() {
@@ -464,60 +463,60 @@ impl Doug {
                             diff,
                             period.project.clone(),
                         ));
-                        println!(
-                            "    {start} to {end} {diff:>width$} {project}",
+                        message.push_str(format!(
+                            "    {start} to {end} {diff:>width$} {project}\n",
                             start = format_time(period.start_time),
                             end = format_time(end_time),
                             diff = format_duration(diff),
                             project = period.project.clone().blue(),
                             width = 11
-                        )
+                        ).as_str());
                     }
                     None => {
                         let diff = Utc::now().signed_duration_since(period.start_time);
-                        println!(
-                            "    {start} to {end} {diff:>width$} {project}",
+                        message.push_str(format!(
+                            "    {start} to {end} {diff:>width$} {project}\n",
                             start = format_time(period.start_time),
                             end = format_time(Utc::now()),
                             diff = format_duration(diff),
                             project = period.project.clone().blue(),
                             width = 11
-                        )
+                        ).as_str());
                     }
                 }
             }
         }
-        Ok(())
+        Ok(Some(message))
     }
 
-    pub fn cancel(&mut self) -> DougResult<()> {
+    pub fn cancel(&mut self) -> DougResult {
         if let Some(period) = self.periods.pop() {
             if period.end_time.is_none() {
                 self.save()?;
                 let diff = Utc::now().signed_duration_since(period.start_time);
-                println!(
+                return Ok(Some(format!(
                     "Canceled project {}, started {} ago",
                     period.project.blue(),
                     format_duration(diff)
-                );
-                return Ok(());
+                )));
             }
         }
-        Err(format!("Error: {}", "No project started".red()))
+        Err("No project started".to_string())
     }
 
-    pub fn stop(&mut self) -> DougResult<()> {
+    pub fn stop(&mut self) -> DougResult {
         if let Some(mut period) = self.periods.pop() {
             if period.end_time.is_none() {
                 period.end_time = Some(Utc::now());
                 let diff = Utc::now().signed_duration_since(period.start_time);
-                println!(
+                let messaage = format!(
                     "Stopped project {}, started {} ago",
                     period.project.blue(),
                     format_duration(diff)
                 );
                 self.periods.push(period);
-                return self.save();
+                self.save()?;
+                return Ok(Some(messaage));
             }
         }
         Err(format!("Error: {}", "No project started.".red()))
@@ -528,7 +527,7 @@ impl Doug {
         self.periods.last_mut()
     }
 
-    pub fn edit(&mut self, start: Option<&str>, end: Option<&str>) -> DougResult<()> {
+    pub fn edit(&mut self, start: Option<&str>, end: Option<&str>) -> DougResult {
         if let Some(start) = start {
             match parse_date_string(start, Local::now(), Dialect::Us) {
                 Ok(x) => {
@@ -543,8 +542,7 @@ impl Doug {
                     }
                     self.save()?;
                     if let Some(last_period) = self.clone().last_period() {
-                        println!("{}", last_period);
-                        return Ok(());
+                        return Ok(Some(format!("{}", last_period)));
                     } else {
                         return Err("Error: Couldn't find last period.".to_string());
                     }
@@ -566,8 +564,7 @@ impl Doug {
                     }
                     self.save()?;
                     if let Some(last_period) = self.clone().last_period() {
-                        println!("{}", last_period);
-                        return Ok(());
+                        return Ok(Some(format!("{}", last_period)));
                     } else {
                         return Err("Error: Couldn't find last period.".to_string());
                     }
@@ -584,7 +581,7 @@ impl Doug {
             }
         };
         let path = Path::new(&home).join(".doug/periods.json");
-        println!("File: {}", path.to_str().unwrap_or("none").blue());
+        let message = format!("File: {}\n", path.to_str().unwrap_or("none").blue());
         if let Some(editor) = env::var_os("EDITOR") {
             let mut edit = Command::new(editor);
             edit.arg(path.clone());
@@ -595,7 +592,7 @@ impl Doug {
         } else {
             return Err(format!("Error: {}", "Couldn't open editor".red()));
         }
-        Ok(())
+        Ok(Some(message))
     }
 }
 
