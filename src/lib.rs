@@ -7,6 +7,8 @@ extern crate serde;
 extern crate serde_derive;
 extern crate serde_json;
 
+mod format;
+
 use std::collections::HashMap;
 use std::env;
 use std::fs;
@@ -40,23 +42,19 @@ impl Period {
 
 impl fmt::Display for Period {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        let end_time = match self.end_time {
-            Some(x) => x,
-            None => Utc::now(),
-        };
+        let end_time = self.end_time.unwrap_or(Utc::now());
         let diff = end_time.signed_duration_since(self.start_time);
-        let start_time = format_time(self.start_time);
-        let end_time = if self.end_time.is_some() {
-            format_time(end_time)
-        } else {
-            "present".to_string()
+        let start_time = format::time(self.start_time);
+        let end_time = match self.end_time {
+            Some(time) => format::time(time),
+            None => "present".to_string(),
         };
         write!(
             f,
             "{} to {} {}",
             start_time,
             end_time,
-            format_duration(diff).purple()
+            format::duration(diff).purple()
         )
     }
 }
@@ -70,32 +68,24 @@ type DougResult = Result<Option<String>, String>;
 
 impl Doug {
     pub fn new() -> Result<Self, String> {
-        let home_dir = match env::var("HOME") {
-            Ok(x) => x,
-            Err(_) => {
-                return Err("Failed to find home directory from environment 'HOME'. Doug needs 'HOME' to be set to find its data.".to_string());
-            }
-        };
+        let home_dir = env::var("HOME").map_err(|_| "Failed to find home directory from environment 'HOME'. Doug needs 'HOME' to be set to find its data.".to_string())?;
         let mut folder = PathBuf::from(home_dir);
         folder.push(".doug");
+
         // create .doug directory
-        match DirBuilder::new().recursive(true).create(&folder) {
-            Ok(_) => {}
-            Err(_) => return Err(format!("Couldn't create data directory: {:?}\n", folder)),
-        }
+        DirBuilder::new()
+            .recursive(true)
+            .create(&folder)
+            .map_err(|_| format!("Couldn't create data directory: {:?}\n", folder))?;
+
         // create data file
         let data_file_path = folder.as_path().join("periods.json");
-        let data_file = match OpenOptions::new()
+        let data_file = OpenOptions::new()
             .create(true)
             .read(true)
             .write(true)
             .open(&data_file_path)
-        {
-            Ok(x) => x,
-            Err(_) => {
-                return Err(format!("Couldn't open datafile: {:?}\n", data_file_path));
-            }
-        };
+            .map_err(|_| format!("Couldn't open datafile: {:?}\n", data_file_path))?;
 
         // serialize periods from data file
         let periods: Result<Vec<Period>, Error> = serde_json::from_reader(data_file);
@@ -118,13 +108,13 @@ impl Doug {
                 return Ok(Some(if simple_name {
                     format!("{}\n", period.project)
                 } else if simple_time {
-                    format!("{}\n", format_duration(diff))
+                    format!("{}\n", format::duration(diff))
                 } else {
                     format!(
                         "Project {} started {} ago ({})\n",
                         period.project.magenta(),
-                        format_duration(diff),
-                        format_datetime(period.start_time).blue()
+                        format::duration(diff),
+                        format::datetime(period.start_time).blue()
                     )
                 }));
             }
@@ -137,35 +127,23 @@ impl Doug {
     }
 
     pub fn save(&self) -> DougResult {
-        let serialized = match serde_json::to_string(&self.periods) {
-            Ok(x) => x,
-            Err(_) => return Err("Couldn't serialize data to string".to_string()),
-        };
-        let home = match env::var("HOME") {
-            Ok(x) => x,
-            Err(_) => return Err("Couldn't find `HOME`".to_string()),
-        };
-        let data_file = Path::new(&home).join(".doug/periods.json");
+        let serialized = serde_json::to_string(&self.periods)
+            .map_err(|_| "Couldn't serialize data to string".to_string())?;
+        let home_dir = env::var("HOME").map_err(|_| "Failed to find home directory from environment 'HOME'. Doug needs 'HOME' to be set to find its data.".to_string())?;
+        let data_file = Path::new(&home_dir).join(".doug/periods.json");
         let mut data_file_backup = data_file.clone();
         data_file_backup.set_extension("json-backup");
-        match fs::copy(&data_file, &data_file_backup) {
-            Ok(_) => {}
-            Err(_) => return Err("Couldn't create backup file".to_string()),
-        };
-        let mut file = match OpenOptions::new()
+        fs::copy(&data_file, &data_file_backup)
+            .map_err(|_| "Couldn't create backup file".to_string())?;
+        let mut file = OpenOptions::new()
             .create(true)
             .write(true)
             .truncate(true)
             .open(&data_file)
-        {
-            Ok(x) => x,
-            Err(_) => return Err("Couldn't open file for saving period.".to_string()),
-        };
-
-        match file.write_all(serialized.as_bytes()) {
-            Ok(_) => Ok(None),
-            Err(_) => return Err("Couldn't write serialized data to file".to_string()),
-        }
+            .map_err(|_| "Couldn't open file for saving period.".to_string())?;
+        file.write_all(serialized.as_bytes())
+            .map_err(|_| "Couldn't write serialized data to file".to_string())?;
+        Ok(None)
     }
 
     pub fn start(&mut self, project_name: &str) -> DougResult {
@@ -188,7 +166,7 @@ impl Doug {
         let message = format!(
             "Started tracking project {} at {}\n",
             current_period.project.blue(),
-            format_time(current_period.start_time)
+            format::time(current_period.start_time)
         );
         self.periods.push(current_period);
         self.save()?;
@@ -208,10 +186,9 @@ impl Doug {
                 self.periods.push(period);
                 self.save()?;
                 return Ok(Some(message));
-
             }
         }
-        Err(format!("Error: {}", "No project started".red()))
+        Err("No project started".to_string())
     }
 
     pub fn report(
@@ -249,7 +226,7 @@ impl Doug {
                     from_date_parsed = Date::from_utc(result, offset);
                 }
                 Err(_error) => {
-                    let mut error = format!("Error: {}", "Invalid date format.\n".red());
+                    let mut error = "Invalid date format.\n".to_string();
                     error.push_str(format!("Required format: {}", "%Y-%m-%d".blue()).as_str());
                     return Err(error);
                 }
@@ -261,7 +238,7 @@ impl Doug {
                     to_date_parsed = Date::from_utc(result, offset);
                 }
                 Err(_error) => {
-                    let mut error = format!("Error: {}", "Invalid date format.\n".red());
+                    let mut error = "Invalid date format.\n".to_string();
                     error.push_str(format!("Required format: {}", "%Y-%m-%d".blue()).as_str());
                     return Err(error);
                 }
@@ -351,8 +328,9 @@ impl Doug {
                 max_proj_len = project.to_string().len();
             }
             // find lengths of durations names for alignment
-            if format_duration(duration).len() > max_diff_len {
-                max_diff_len = format_duration(duration).len();
+
+            if format::duration(duration).len() > max_diff_len {
+                max_diff_len = format::duration(duration).len();
             }
             results.push((project.clone(), duration));
         }
@@ -363,13 +341,15 @@ impl Doug {
         );
         results.sort();
         for &(ref project, ref duration) in &results {
-            message.push_str(format!(
-                "{project:pwidth$} {duration:>dwidth$}\n",
-                project = project.green(),
-                duration = format_duration(*duration).bold(),
-                pwidth = max_proj_len,
-                dwidth = max_diff_len
-            ).as_str());
+            message.push_str(
+                format!(
+                    "{project:pwidth$} {duration:>dwidth$}\n",
+                    project = project.green(),
+                    duration = format::duration(*duration).bold(),
+                    pwidth = max_proj_len,
+                    dwidth = max_diff_len
+                ).as_str(),
+            );
         }
         Ok(Some(message))
     }
@@ -384,11 +364,14 @@ impl Doug {
             }
         }
         if project_not_found {
-            Err(format!("Error: {}", "Project not found.\n".red()))
+            Err("Project not found.\n".to_string())
         } else {
             self.periods = filtered_periods;
             self.save()?;
-            Ok(Some(format!("Deleted project {project}\n", project = project_name.blue())))
+            Ok(Some(format!(
+                "Deleted project {project}\n",
+                project = project_name.blue()
+            )))
         }
     }
 
@@ -401,7 +384,10 @@ impl Doug {
                 new_periods.push(new_period);
                 self.periods = new_periods.to_vec();
                 self.save()?;
-                return Ok(Some(format!("Tracking last running project: {}", period.project.blue())));
+                return Ok(Some(format!(
+                    "Tracking last running project: {}",
+                    period.project.blue()
+                )));
             } else {
                 let mut error = format!(
                     "No project to restart. Project {} is being tracked\n",
@@ -416,7 +402,7 @@ impl Doug {
                 return Err(error);
             }
         }
-        Err(format!("Error: {}", "No previous project to restart".red()))
+        Err("No previous project to restart".to_string())
     }
     pub fn log(&self) -> DougResult {
         let mut days: HashMap<Date<chrono::Local>, Vec<Period>> = HashMap::new();
@@ -441,15 +427,17 @@ impl Doug {
                     .unwrap_or_else(Utc::now)
                     .signed_duration_since(x.start_time))
             });
-            message.push_str(format!(
-                "{date} ({duration})\n",
-                date = date
-                    .with_timezone(&Local)
-                    .format("%A %-d %B %Y")
-                    .to_string()
-                    .green(),
-                duration = format_duration(d).bold()
-            ).as_str());
+            message.push_str(
+                format!(
+                    "{date} ({duration})\n",
+                    date = date
+                        .with_timezone(&Local)
+                        .format("%A %-d %B %Y")
+                        .to_string()
+                        .green(),
+                    duration = format::duration(d).bold()
+                ).as_str(),
+            );
             // find time tracker per period
             let mut project_periods = Vec::new();
             for period in day.iter() {
@@ -463,25 +451,29 @@ impl Doug {
                             diff,
                             period.project.clone(),
                         ));
-                        message.push_str(format!(
-                            "    {start} to {end} {diff:>width$} {project}\n",
-                            start = format_time(period.start_time),
-                            end = format_time(end_time),
-                            diff = format_duration(diff),
-                            project = period.project.clone().blue(),
-                            width = 11
-                        ).as_str());
+                        message.push_str(
+                            format!(
+                                "    {start} to {end} {diff:>width$} {project}\n",
+                                start = format::time(period.start_time),
+                                end = format::time(end_time),
+                                diff = format::duration(diff),
+                                project = period.project.clone().blue(),
+                                width = 11
+                            ).as_str(),
+                        );
                     }
                     None => {
                         let diff = Utc::now().signed_duration_since(period.start_time);
-                        message.push_str(format!(
-                            "    {start} to {end} {diff:>width$} {project}\n",
-                            start = format_time(period.start_time),
-                            end = format_time(Utc::now()),
-                            diff = format_duration(diff),
-                            project = period.project.clone().blue(),
-                            width = 11
-                        ).as_str());
+                        message.push_str(
+                            format!(
+                                "    {start} to {end} {diff:>width$} {project}\n",
+                                start = format::time(period.start_time),
+                                end = format::time(Utc::now()),
+                                diff = format::duration(diff),
+                                project = period.project.clone().blue(),
+                                width = 11
+                            ).as_str(),
+                        );
                     }
                 }
             }
@@ -490,36 +482,36 @@ impl Doug {
     }
 
     pub fn cancel(&mut self) -> DougResult {
-        if let Some(period) = self.periods.pop() {
-            if period.end_time.is_none() {
+        match self.periods.pop() {
+            Some(ref mut period) if period.end_time.is_none() => {
                 self.save()?;
                 let diff = Utc::now().signed_duration_since(period.start_time);
                 return Ok(Some(format!(
                     "Canceled project {}, started {} ago",
                     period.project.blue(),
-                    format_duration(diff)
+                    format::duration(diff)
                 )));
             }
+            _ => Err("No project started.".to_string()),
         }
-        Err("No project started".to_string())
     }
 
     pub fn stop(&mut self) -> DougResult {
-        if let Some(mut period) = self.periods.pop() {
-            if period.end_time.is_none() {
+        match self.periods.pop() {
+            Some(ref mut period) if period.end_time.is_none() => {
                 period.end_time = Some(Utc::now());
                 let diff = Utc::now().signed_duration_since(period.start_time);
                 let messaage = format!(
                     "Stopped project {}, started {} ago",
                     period.project.blue(),
-                    format_duration(diff)
+                    format::duration(diff)
                 );
-                self.periods.push(period);
+                self.periods.push(period.clone());
                 self.save()?;
                 return Ok(Some(messaage));
             }
+            _ => Err("No project started.".to_string()),
         }
-        Err(format!("Error: {}", "No project started.".red()))
     }
 
     /// Retrieve last active (including current) period
@@ -529,69 +521,44 @@ impl Doug {
 
     pub fn edit(&mut self, start: Option<&str>, end: Option<&str>) -> DougResult {
         if let Some(start) = start {
-            match parse_date_string(start, Local::now(), Dialect::Us) {
-                Ok(x) => {
-                    {
-                        let period = match self.last_period() {
-                            Some(x) => x,
-                            None => {
-                                return Err("no period to edit".to_string());
-                            }
-                        };
-                        period.start_time = x.with_timezone(&Utc);
-                    }
-                    self.save()?;
-                    if let Some(last_period) = self.clone().last_period() {
-                        return Ok(Some(format!("{}", last_period)));
-                    } else {
-                        return Err("Error: Couldn't find last period.".to_string());
-                    }
-                }
-                Err(_) => {
-                    return Err(format!("Couldn't parse date {}", start));
-                }
-            };
-        }
-        if let Some(end) = end {
-            match parse_date_string(end, Local::now(), Dialect::Us) {
-                Ok(x) => {
-                    {
-                        let period = match self.last_period() {
-                            Some(x) => x,
-                            None => return Err("no period to edit".to_string()),
-                        };
-                        period.end_time = Some(x.with_timezone(&Utc));
-                    }
-                    self.save()?;
-                    if let Some(last_period) = self.clone().last_period() {
-                        return Ok(Some(format!("{}", last_period)));
-                    } else {
-                        return Err("Error: Couldn't find last period.".to_string());
-                    }
-                }
-                Err(_) => {
-                    return Err(format!("Couldn't parse date {}", end));
-                }
-            };
-        }
-        let home = match env::var("HOME") {
-            Ok(x) => x,
-            Err(_) => {
-                return Err("Failed to find home directory from environment 'HOME'".to_string())
+            let date = parse_date_string(start, Local::now(), Dialect::Us)
+                .map_err(|_| format!("Couldn't parse date {}", start))?;
+            {
+                let period = self.last_period().ok_or("no period to edit".to_string())?;
+                period.start_time = date.with_timezone(&Utc);
             }
-        };
+            self.save()?;
+            return Ok(Some(
+                self.clone()
+                    .last_period()
+                    .ok_or("Couldn't find last period.".to_string())?
+                    .to_string(),
+            ));
+        }
+
+        if let Some(end) = end {
+            let date = parse_date_string(end, Local::now(), Dialect::Us)
+                .map_err(|_| format!("Couldn't parse date {}", end))?;
+            {
+                let period = self.last_period().ok_or("no period to edit".to_string())?;
+                period.end_time = Some(date.with_timezone(&Utc));
+            }
+            self.save()?;
+            return Ok(Some(
+                self.clone()
+                    .last_period()
+                    .ok_or("Couldn't find last period.".to_string())?
+                    .to_string(),
+            ));
+        }
+        let home = env::var("HOME").map_err(|_| "Failed to find home directory from environment 'HOME'. Doug needs 'HOME' to be set to find its data.".to_string())?;
         let path = Path::new(&home).join(".doug/periods.json");
         let message = format!("File: {}\n", path.to_str().unwrap_or("none").blue());
-        if let Some(editor) = env::var_os("EDITOR") {
-            let mut edit = Command::new(editor);
-            edit.arg(path.clone());
-            let status = edit.status();
-            if status.is_err() {
-                return Err(format!("Error: {}", "Problem with editing.".red()));
-            }
-        } else {
-            return Err(format!("Error: {}", "Couldn't open editor".red()));
-        }
+        let editor = env::var("EDITOR").map_err(|_| "Couldn't open editor".to_string())?;
+        let mut edit = Command::new(editor);
+        edit.arg(path.clone());
+        edit.status()
+            .map_err(|_| "Problem with editing.".to_string())?;
         Ok(Some(message))
     }
 }
@@ -648,36 +615,5 @@ pub fn add_interval(
         }
     } else {
         Duration::zero()
-    }
-}
-
-fn format_datetime(time: DateTime<Utc>) -> String {
-    time.with_timezone(&Local).format("%F %H:%M").to_string()
-}
-
-fn format_time(time: DateTime<Utc>) -> String {
-    time.with_timezone(&Local).format("%H:%M").to_string()
-}
-
-fn format_duration(duration: Duration) -> String {
-    let hours = duration.num_hours();
-    let minutes = duration.num_minutes() % 60;
-    let seconds = duration.num_seconds() % 60;
-
-    if duration.num_minutes() == 0 {
-        format!("{}s", seconds)
-    } else if duration.num_hours() == 0 {
-        format!(
-            "{minutes}m {seconds:>2}s",
-            minutes = minutes,
-            seconds = seconds
-        )
-    } else {
-        format!(
-            "{hours}h {minutes:>2}m {seconds:>2}s",
-            hours = hours,
-            minutes = minutes,
-            seconds = seconds
-        )
     }
 }
