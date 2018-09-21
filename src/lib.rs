@@ -14,7 +14,7 @@ use std::env;
 use std::fs;
 use std::fs::{DirBuilder, OpenOptions};
 use std::io::Write;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::process::Command;
 
 use chrono::{Date, DateTime, Duration, Local, NaiveDate, TimeZone, Utc};
@@ -111,22 +111,23 @@ impl Doug {
             .map_err(|_| format!("Couldn't create data directory: {:?}\n", folder))?;
 
         // create data file
-        let data_file_path = folder.as_path().join("periods.json");
+        let location = folder.as_path().join("periods.json");
         let data_file = OpenOptions::new()
             .create(true)
             .read(true)
             .write(true)
-            .open(&data_file_path)
-            .map_err(|_| format!("Couldn't open datafile: {:?}\n", data_file_path))?;
+            .open(&location)
+            .map_err(|_| format!("Couldn't open datafile: {:?}\n", location))?;
 
         // serialize periods from data file
         let periods: Result<Vec<Period>, Error> = serde_json::from_reader(data_file);
 
         match periods {
-            Ok(periods) => Ok(Doug { periods }),
+            Ok(periods) => Ok(Doug { periods, location }),
             // No periods exist. Create a new Doug instance.
             Err(ref error) if error.is_eof() => Ok(Doug {
                 periods: Vec::new(),
+                location,
             }),
             Err(error) => Err(format!("There was a serialization issue: {:?}\n", error)),
         }
@@ -199,17 +200,15 @@ impl Doug {
     pub fn save(&self) -> DougResult {
         let serialized = serde_json::to_string(&self.periods)
             .map_err(|_| "Couldn't serialize data to string".to_string())?;
-        let home_dir = env::var("HOME").map_err(|_| "Failed to find home directory from environment 'HOME'. Doug needs 'HOME' to be set to find its data.".to_string())?;
-        let data_file = Path::new(&home_dir).join(".doug/periods.json");
-        let mut data_file_backup = data_file.clone();
-        data_file_backup.set_extension("json-backup");
-        fs::copy(&data_file, &data_file_backup)
+        let mut location_backup = self.location.clone();
+        location_backup.set_extension("json-backup");
+        fs::copy(&self.location, &location_backup)
             .map_err(|_| "Couldn't create backup file".to_string())?;
         let mut file = OpenOptions::new()
             .create(true)
             .write(true)
             .truncate(true)
-            .open(&data_file)
+            .open(&self.location)
             .map_err(|_| "Couldn't open file for saving period.".to_string())?;
         file.write_all(serialized.as_bytes())
             .map_err(|_| "Couldn't write serialized data to file".to_string())?;
@@ -621,12 +620,13 @@ impl Doug {
                     .to_string(),
             ));
         }
-        let home = env::var("HOME").map_err(|_| "Failed to find home directory from environment 'HOME'. Doug needs 'HOME' to be set to find its data.".to_string())?;
-        let path = Path::new(&home).join(".doug/periods.json");
-        let message = format!("File: {}\n", path.to_str().unwrap_or("none").blue());
+        let message = format!(
+            "File: {}\n",
+            self.location.to_str().ok_or("Invalid path")?.blue()
+        );
         let editor = env::var("EDITOR").map_err(|_| "Couldn't open editor".to_string())?;
         let mut edit = Command::new(editor);
-        edit.arg(path.clone());
+        edit.arg(self.location.clone());
         edit.status()
             .map_err(|_| "Problem with editing.".to_string())?;
         Ok(Some(message))
