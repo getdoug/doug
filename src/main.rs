@@ -199,19 +199,19 @@ fn main() {
         ("generate-completions", Some(matches)) => match matches.value_of("shell") {
             Some("bash") => {
                 cli.gen_completions_to("doug", Shell::Bash, &mut stdout());
-                Ok("".to_string())
+                Ok(None)
             }
             Some("zsh") => {
                 cli.gen_completions_to("doug", Shell::Zsh, &mut stdout());
-                Ok("".to_string())
+                Ok(None)
             }
             Some("fish") => {
                 cli.gen_completions_to("doug", Shell::Fish, &mut stdout());
-                Ok("".to_string())
+                Ok(None)
             }
             Some("powershell") => {
                 cli.gen_completions_to("doug", Shell::PowerShell, &mut stdout());
-                Ok("".to_string())
+                Ok(None)
             }
             _ => Err("Invalid option".to_string()),
         },
@@ -224,7 +224,10 @@ fn main() {
     };
 
     match results {
-        Ok(m) => print!("{}", m),
+        Ok(m) => match m {
+            Some(m) => print!("{}", m),
+            None => {}
+        },
         Err(e) => {
             eprintln!("{} {}", "Error:".red(), e);
             process::exit(1)

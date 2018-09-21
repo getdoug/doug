@@ -66,7 +66,7 @@ pub struct Doug {
     periods: Vec<Period>,
 }
 
-type DougResult = Result<String, String>;
+type DougResult = Result<Option<String>, String>;
 
 impl Doug {
     pub fn new() -> Result<Self, String> {
@@ -115,7 +115,7 @@ impl Doug {
         if let Some(period) = &self.periods.last() {
             if period.end_time.is_none() {
                 let diff = Utc::now().signed_duration_since(period.start_time);
-                return Ok((if simple_name {
+                return Ok(Some(if simple_name {
                     format!("{}\n", period.project)
                 } else if simple_time {
                     format!("{}\n", format_duration(diff))
@@ -132,7 +132,7 @@ impl Doug {
         if !(simple_name || simple_time) {
             Err("No running project".to_string())
         } else {
-            Ok("".to_string())
+            Ok(None)
         }
     }
 
@@ -163,7 +163,7 @@ impl Doug {
         };
 
         match file.write_all(serialized.as_bytes()) {
-            Ok(_) => Ok("".to_string()),
+            Ok(_) => Ok(None),
             Err(_) => return Err("Couldn't write serialized data to file".to_string()),
         }
     }
@@ -192,7 +192,7 @@ impl Doug {
         );
         self.periods.push(current_period);
         self.save()?;
-        Ok((message))
+        Ok(Some(message))
     }
 
     pub fn amend(&mut self, project_name: &str) -> DougResult {
@@ -207,7 +207,7 @@ impl Doug {
                 );
                 self.periods.push(period);
                 self.save()?;
-                return Ok((message));
+                return Ok(Some(message));
 
             }
         }
@@ -371,7 +371,7 @@ impl Doug {
                 dwidth = max_diff_len
             ).as_str());
         }
-        Ok((message))
+        Ok(Some(message))
     }
     pub fn delete(&mut self, project_name: &str) -> DougResult {
         let mut project_not_found = true;
@@ -388,7 +388,7 @@ impl Doug {
         } else {
             self.periods = filtered_periods;
             self.save()?;
-            Ok((format!("Deleted project {project}\n", project = project_name.blue())))
+            Ok(Some(format!("Deleted project {project}\n", project = project_name.blue())))
         }
     }
 
@@ -401,7 +401,7 @@ impl Doug {
                 new_periods.push(new_period);
                 self.periods = new_periods.to_vec();
                 self.save()?;
-                return Ok((format!("Tracking last running project: {}", period.project.blue())));
+                return Ok(Some(format!("Tracking last running project: {}", period.project.blue())));
             } else {
                 let mut error = format!(
                     "No project to restart. Project {} is being tracked\n",
@@ -486,7 +486,7 @@ impl Doug {
                 }
             }
         }
-        Ok((message))
+        Ok(Some(message))
     }
 
     pub fn cancel(&mut self) -> DougResult {
@@ -494,7 +494,7 @@ impl Doug {
             if period.end_time.is_none() {
                 self.save()?;
                 let diff = Utc::now().signed_duration_since(period.start_time);
-                return Ok((format!(
+                return Ok(Some(format!(
                     "Canceled project {}, started {} ago",
                     period.project.blue(),
                     format_duration(diff)
@@ -516,7 +516,7 @@ impl Doug {
                 );
                 self.periods.push(period);
                 self.save()?;
-                return Ok((messaage));
+                return Ok(Some(messaage));
             }
         }
         Err(format!("Error: {}", "No project started.".red()))
@@ -542,7 +542,7 @@ impl Doug {
                     }
                     self.save()?;
                     if let Some(last_period) = self.clone().last_period() {
-                        return Ok((format!("{}", last_period)));
+                        return Ok(Some(format!("{}", last_period)));
                     } else {
                         return Err("Error: Couldn't find last period.".to_string());
                     }
@@ -564,7 +564,7 @@ impl Doug {
                     }
                     self.save()?;
                     if let Some(last_period) = self.clone().last_period() {
-                        return Ok((format!("{}", last_period)));
+                        return Ok(Some(format!("{}", last_period)));
                     } else {
                         return Err("Error: Couldn't find last period.".to_string());
                     }
@@ -592,7 +592,7 @@ impl Doug {
         } else {
             return Err(format!("Error: {}", "Couldn't open editor".red()));
         }
-        Ok((message))
+        Ok(Some(message))
     }
 }
 
