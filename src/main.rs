@@ -153,7 +153,7 @@ fn main() {
 
     let matches = cli.clone().get_matches();
 
-    let mut doug = match Doug::new() {
+    let mut doug = match Doug::new(None) {
         Ok(x) => x,
         Err(e) => {
             eprintln!("Error: {}", e);

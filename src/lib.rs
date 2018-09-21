@@ -7,7 +7,7 @@ extern crate serde;
 extern crate serde_derive;
 extern crate serde_json;
 
-mod format;
+pub mod format;
 
 use std::collections::HashMap;
 use std::env;
@@ -59,6 +59,11 @@ impl fmt::Display for Period {
     }
 }
 
+/// Doug, a time tracking command-line utility.
+/// 
+/// This is the backend where all the logic for Doug is kept.
+/// The current implementation uses `$HOME/.doug/` for storing data, 
+/// while the CLI stuff is handled by [clap] in `main.rs`.
 #[derive(Default, Clone)]
 pub struct Doug {
     periods: Vec<Period>,
@@ -67,10 +72,31 @@ pub struct Doug {
 type DougResult = Result<Option<String>, String>;
 
 impl Doug {
-    pub fn new() -> Result<Self, String> {
-        let home_dir = env::var("HOME").map_err(|_| "Failed to find home directory from environment 'HOME'. Doug needs 'HOME' to be set to find its data.".to_string())?;
-        let mut folder = PathBuf::from(home_dir);
-        folder.push(".doug");
+    /// Initialize a new Doug instance
+    /// 
+    /// If missing, the data file will be created at `$HOME/.doug/periods.json`.
+    /// 
+    /// # Arguments
+    /// * `path` — an optional path to the root of the data folder.
+    ///
+    /// # Examples
+    /// ```
+    /// # use doug::*;
+    /// 
+    /// // Create a new Doug instance with default data location
+    /// let doug = Doug::new(None).unwrap();
+    /// 
+    /// ```
+    pub fn new(path: Option<PathBuf>) -> Result<Self, String> {
+        let folder = match path {
+            Some(path) => path,
+            None => {
+                let home_dir = env::var("HOME").map_err(|_| "Failed to find home directory from environment 'HOME'. Doug needs 'HOME' to be set to find its data.".to_string())?;
+                let mut folder = PathBuf::from(home_dir);
+                folder.push(".doug");
+                folder
+            }
+        };
 
         // create .doug directory
         DirBuilder::new()
@@ -100,12 +126,45 @@ impl Doug {
         }
     }
 
+    /// Log currently running project, duration of current period, and the datetime tracking
+    /// started.
+    ///
+    /// If there is no running project, logs `No running project`. The CLI returns exit code 1.
+    ///
+    /// See arguments to refine the output of this command.
+    ///
+    /// # Arguments
+    /// * `simple_name` — Print just the name of the currently running project,
+    /// or nothing.
+    /// * `simple_time` — Print just the current time, formated with [format::duration].
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use doug::*;
+    /// # let mut doug = Doug::new(None).unwrap();
+    /// #
+    /// // with no running project, this will return Err
+    /// doug.status(false, false).expect_err("No running project");
+    ///
+    /// doug.start("test");
+    ///
+    /// // no args
+    /// doug.status(false, false).expect("Should return Ok");
+    ///
+    /// // simple_name
+    /// doug.status(true, false).expect("Should return Ok");
+    ///
+    /// // simple_time
+    /// doug.status(false, true).expect("Should be fine too");
+    ///
+    /// # doug.stop();
+    /// ```
     pub fn status(&self, simple_name: bool, simple_time: bool) -> DougResult {
-        // TODO(chdsbd): Return status as String
         if let Some(period) = &self.periods.last() {
             if period.end_time.is_none() {
                 let diff = Utc::now().signed_duration_since(period.start_time);
-                return Ok(Some(if simple_name {
+                let message = if simple_name {
                     format!("{}\n", period.project)
                 } else if simple_time {
                     format!("{}\n", format::duration(diff))
@@ -116,7 +175,8 @@ impl Doug {
                         format::duration(diff),
                         format::datetime(period.start_time).blue()
                     )
-                }));
+                };
+                return Ok(Some(message));
             }
         }
         if !(simple_name || simple_time) {
@@ -576,7 +636,6 @@ pub fn add_interval(
     // start time is within starting limit
     if start_time >= start_limit && start_time <= end_limit {
         // Find starting date
-        // FIXME:
         if start_time.with_timezone(&Local).date() < *start_date {
             *start_date = start_time.with_timezone(&Local).date();
         }
@@ -595,7 +654,6 @@ pub fn add_interval(
         }
     } else if end_time >= start_limit && end_time <= end_limit {
         // Find starting date
-        // FIXME
         if start_limit.with_timezone(&Local).date() < *start_date {
             *start_date = start_limit.with_timezone(&Local).date();
         }
