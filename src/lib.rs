@@ -60,32 +60,38 @@ impl fmt::Display for Period {
 }
 
 /// Doug, a time tracking command-line utility.
-/// 
+///
 /// This is the backend where all the logic for Doug is kept.
-/// The current implementation uses `$HOME/.doug/` for storing data, 
+/// The current implementation uses `$HOME/.doug/` for storing data,
 /// while the CLI stuff is handled by [clap] in `main.rs`.
 #[derive(Default, Clone)]
 pub struct Doug {
     periods: Vec<Period>,
+    /// Path to periods.json file for storing doug data.
+    location: PathBuf,
 }
 
 type DougResult = Result<Option<String>, String>;
 
 impl Doug {
     /// Initialize a new Doug instance
-    /// 
+    ///
     /// If missing, the data file will be created at `$HOME/.doug/periods.json`.
-    /// 
+    ///
     /// # Arguments
     /// * `path` — an optional path to the root of the data folder.
     ///
     /// # Examples
     /// ```
+    /// # extern crate tempfile;
+    /// # extern crate doug;
     /// # use doug::*;
-    /// 
+    /// # let tempdir = tempfile::tempdir().unwrap().into_path();
+    /// #
     /// // Create a new Doug instance with default data location
     /// let doug = Doug::new(None).unwrap();
-    /// 
+    ///
+    /// let doug = Doug::new(Some(tempdir)).unwrap();
     /// ```
     pub fn new(path: Option<PathBuf>) -> Result<Self, String> {
         let folder = match path {
@@ -141,8 +147,12 @@ impl Doug {
     /// # Examples
     ///
     /// ```
+    /// # extern crate tempfile;
+    /// # extern crate doug;
+    /// # let tempdir = tempfile::tempdir().unwrap().into_path();
     /// # use doug::*;
-    /// # let mut doug = Doug::new(None).unwrap();
+    /// // We don't want to mess with existing installations
+    /// # let mut doug = Doug::new(Some(tempdir)).unwrap();
     /// #
     /// // with no running project, this will return Err
     /// doug.status(false, false).expect_err("No running project");
