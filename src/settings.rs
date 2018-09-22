@@ -40,7 +40,7 @@ impl Settings {
                     data_location: folder.to_path_buf(),
                 };
                 Settings::save(&settings, folder)?;
-                return Ok(settings);
+                Ok(settings)
             }
             Err(err) => Err(format!("There was a serialization issue: {:?}\n", err)),
         }
@@ -60,7 +60,7 @@ impl Settings {
         data_file
             .write_all(serialized.as_bytes())
             .map_err(|_| "Couldn't write serialized data to file".to_string())?;
-        return Ok(());
+        Ok(())
     }
 
     pub fn clear(&mut self, folder: &PathBuf) -> Result<(), String> {

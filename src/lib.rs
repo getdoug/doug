@@ -43,7 +43,7 @@ impl Period {
 
 impl fmt::Display for Period {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        let end_time = self.end_time.unwrap_or(Utc::now());
+        let end_time = self.end_time.unwrap_or_else(Utc::now);
         let diff = end_time.signed_duration_since(self.start_time);
         let start_time = format::time(self.start_time);
         let end_time = match self.end_time {
@@ -615,11 +615,11 @@ impl Doug {
             Some(ref mut period) if period.end_time.is_none() => {
                 self.save()?;
                 let diff = Utc::now().signed_duration_since(period.start_time);
-                return Ok(Some(format!(
+                Ok(Some(format!(
                     "Canceled project {}, started {} ago",
                     period.project.blue(),
                     format::duration(diff)
-                )));
+                )))
             }
             _ => Err("No project started.".to_string()),
         }
@@ -638,7 +638,7 @@ impl Doug {
                 );
                 self.periods.push(period.clone());
                 self.save()?;
-                return Ok(Some(messaage));
+                Ok(Some(messaage))
             }
             _ => Err("No project started.".to_string()),
         }
@@ -662,14 +662,18 @@ impl Doug {
         if let Some(start) = start {
             let date = parse_date_string(start, Local::now(), Dialect::Us)
                 .map_err(|_| format!("Couldn't parse date {}", start))?;
-            let period = self.last_period().ok_or("no period to edit".to_string())?;
+            let period = self
+                .last_period()
+                .ok_or_else(|| "no period to edit".to_string())?;
             period.start_time = date.with_timezone(&Utc);
         }
 
         if let Some(end) = end {
             let date = parse_date_string(end, Local::now(), Dialect::Us)
                 .map_err(|_| format!("Couldn't parse date {}", end))?;
-            let period = self.last_period().ok_or("no period to edit".to_string())?;
+            let period = self
+                .last_period()
+                .ok_or_else(|| "no period to edit".to_string())?;
             period.end_time = Some(date.with_timezone(&Utc));
         }
         if start.is_some() || end.is_some() {
@@ -677,7 +681,7 @@ impl Doug {
             return Ok(Some(
                 self.clone()
                     .last_period()
-                    .ok_or("Couldn't find last period.".to_string())?
+                    .ok_or_else(|| "Couldn't find last period.".to_string())?
                     .to_string(),
             ));
         }

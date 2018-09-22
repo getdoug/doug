@@ -238,9 +238,8 @@ fn main() {
     };
 
     match results {
-        Ok(m) => match m {
-            Some(m) => print!("{}", m),
-            None => {}
+        Ok(m) => if let Some(m) = m {
+            print!("{}", m)
         },
         Err(e) => {
             eprintln!("{} {}", "Error:".red(), e);
