@@ -27,23 +27,26 @@ doug generate-completions --shell bash > $(brew --prefix)/etc/bash_completion.d/
 ## Usage
 ```
 USAGE:
-    doug <SUBCOMMAND>
+    doug [FLAGS] <SUBCOMMAND>
 
 FLAGS:
+    -p, --path       Path to load settings file from. (default: ~/.doug/settings.json)
     -h, --help       Prints help information
     -V, --version    Prints version information
 
 SUBCOMMANDS:
-    start      Track new or existing project
-    status     Display elapsed time, start time, and running project name
-    stop       Stop any running projects
-    cancel     Stop running project and remove most recent time interval
-    restart    Track last running project
-    log        Display time intervals across all projects
-    report     Display aggregate time from projects
-    amend      Change name of currently running project
-    edit       Edit last frame or currently running frame
-    delete     Delete all intervals for project
+    start                   Track new or existing project
+    status                  Display elapsed time, start time, and running project name
+    stop                    Stop any running projects
+    cancel                  Stop running project and remove most recent time interval
+    restart                 Track last running project
+    log                     Display time intervals across all projects
+    report                  Display aggregate time from projects
+    amend                   Change name of currently running project
+    edit                    Edit last frame or currently running frame
+    settings                configure doug settings
+    generate-completions    Generate completions
+    delete                  Delete all intervals for project
 ```
 
 ### start
@@ -146,13 +149,33 @@ ARGS:
 Edit last frame or currently running frame
 
 USAGE:
-    doug edit [repo]
+    doug edit [OPTIONS]
 
 FLAGS:
     -h, --help    Prints help information
 
-ARGS:
-    <repo>    project to track
+OPTIONS:
+    -e, --end <end>        ending date
+    -s, --start <start>    starting date
+```
+### settings
+```
+configure doug settings
+
+USAGE:
+    doug settings [FLAGS] [OPTIONS]
+
+FLAGS:
+    -c, --clear    
+            clear settings file
+
+    -h, --help     
+            Prints help information
+
+
+OPTIONS:
+    -p, --path <path>    
+            path to store data file. this only affects the data file location. settings are stored in $HOME.
 ```
 ### delete
 ```

@@ -58,10 +58,12 @@ fn main() {
                         "Print running project name or nothing if there isn't a running project.",
                     )),
             ).subcommand(SubCommand::with_name("stop").about("Stop any running projects"))
+            .subcommand(SubCommand::with_name("s").about("Stop any running projects").settings(&[AppSettings::Hidden, AppSettings::HidePossibleValuesInHelp]))
             .subcommand(
                 SubCommand::with_name("cancel")
                     .about("Stop running project and remove most recent time interval"),
             ).subcommand(SubCommand::with_name("restart").about("Track last running project"))
+            .subcommand(SubCommand::with_name("r").about("Track last running project").settings(&[AppSettings::Hidden, AppSettings::HidePossibleValuesInHelp]))
             .subcommand(
                 SubCommand::with_name("log").about("Display time intervals across all projects"),
             ).subcommand(
@@ -185,7 +187,7 @@ fn main() {
     };
 
     let results = match matches.subcommand() {
-        ("start", Some(matches)) => match matches.value_of("project") {
+        ("start", Some(matches)) | ("s", Some(matches)) => match matches.value_of("project") {
             Some(project) => doug.start(project),
             // Restart last project if not argument is provided
             None => doug.restart(),
@@ -229,7 +231,7 @@ fn main() {
         ("edit", Some(matches)) => doug.edit(matches.value_of("start"), matches.value_of("end")),
         ("stop", Some(_)) => doug.stop(),
         ("cancel", Some(_)) => doug.cancel(),
-        ("restart", Some(_)) => doug.restart(),
+        ("restart", Some(_)) | ("r", Some(_)) => doug.restart(),
         ("log", Some(_)) => doug.log(),
         ("settings", Some(matches)) => {
             doug.settings(matches.value_of("path"), matches.is_present("clear"))
