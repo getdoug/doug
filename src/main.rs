@@ -13,10 +13,16 @@ use std::io::stdout;
 
 use atty::Stream;
 use clap::{App, AppSettings, Arg, Shell, SubCommand};
+use colored::Colorize;
 
 use doug::*;
+use std::process;
 
 fn main() {
+    if !atty::is(Stream::Stdout) {
+        colored::control::set_override(false);
+    }
+
     let mut cli =
         App::new("Doug")
             .version(crate_version!())
@@ -28,7 +34,13 @@ fn main() {
                 AppSettings::SubcommandRequiredElseHelp,
                 AppSettings::VersionlessSubcommands,
                 AppSettings::DisableHelpSubcommand,
-            ]).subcommand(
+                AppSettings::ColorAuto,
+            ]).arg(
+                Arg::with_name("path")
+                    .short("p")
+                    .long("path")
+                    .help("Path to load settings file from. (default: ~/.doug/settings.json)"),
+            ).subcommand(
                 SubCommand::with_name("start")
                     .about("Track new or existing project")
                     .arg(Arg::with_name("project").help(
@@ -107,7 +119,38 @@ fn main() {
                             .required(true),
                     ),
             ).subcommand(
-                SubCommand::with_name("edit").about("Edit last frame or currently running frame"),
+                SubCommand::with_name("edit")
+                    .about("Edit last frame or currently running frame")
+                    .arg(
+                        Arg::with_name("start")
+                            .short("s")
+                            .long("start")
+                            .help("starting date")
+                            .takes_value(true),
+                    ).arg(
+                        Arg::with_name("end")
+                            .short("e")
+                            .long("end")
+                            .help("ending date")
+                            .takes_value(true),
+                    ),
+            )
+            .subcommand(
+                SubCommand::with_name("settings")
+                .about("configure doug settings")
+                .arg(
+                    Arg::with_name("path")
+                    .short("p")
+                    .long("path")
+                    .takes_value(true)
+                    .help("path to store data file")
+                    .long_help("path to store data file. this only affects the data file location. settings are stored in $HOME.")
+                ).arg(
+                    Arg::with_name("clear")
+                    .short("c")
+                    .long("clear")
+                    .help("clear settings file")
+                )
             ).subcommand(
                 SubCommand::with_name("generate-completions")
                     .about("Generate completions")
@@ -133,68 +176,74 @@ fn main() {
 
     let matches = cli.clone().get_matches();
 
-    let doug = Doug::new();
+    let mut doug = match Doug::new(matches.value_of("path")) {
+        Ok(x) => x,
+        Err(e) => {
+            eprintln!("Error: {}", e);
+            process::exit(1)
+        }
+    };
 
-    if !atty::is(Stream::Stdout) {
-        colored::control::set_override(false);
-    }
-
-    if let Some(matches) = matches.subcommand_matches("start") {
-        if matches.is_present("project") {
-            doug.start(matches.value_of("project").unwrap());
-        } else {
+    let results = match matches.subcommand() {
+        ("start", Some(matches)) => match matches.value_of("project") {
+            Some(project) => doug.start(project),
             // Restart last project if not argument is provided
-            doug.restart()
-        }
-    } else if let Some(matches) = matches.subcommand_matches("amend") {
-        if matches.is_present("project") {
-            doug.amend(matches.value_of("project").expect("missing project name"));
-        }
-    } else if let Some(matches) = matches.subcommand_matches("delete") {
-        doug.delete(matches.value_of("project").expect("missing project name"));
-    } else if let Some(matches) = matches.subcommand_matches("status") {
-        doug.status(matches.is_present("s"), matches.is_present("t"));
-    } else if let Some(matches) = matches.subcommand_matches("report") {
-        doug.report(
-            (
-                matches.is_present("year"),
-                matches.occurrences_of("year") as i32,
-            ),
-            (
-                matches.is_present("month"),
-                matches.occurrences_of("month") as i32,
-            ),
-            (
-                matches.is_present("week"),
-                matches.occurrences_of("week") as i32,
-            ),
-            (
-                matches.is_present("day"),
-                matches.occurrences_of("day") as i32,
-            ),
+            None => doug.restart(),
+        },
+        ("amend", Some(matches)) => match matches.value_of("project") {
+            Some(project) => doug.amend(project),
+            None => Err("Missing project name".to_string()),
+        },
+        ("delete", Some(matches)) => match matches.value_of("project") {
+            Some(project) => doug.delete(project),
+            None => Err("missing project name".to_string()),
+        },
+        ("status", Some(matches)) => doug.status(matches.is_present("s"), matches.is_present("t")),
+        ("report", Some(matches)) => doug.report(
+            matches.occurrences_of("year") as i32,
+            matches.occurrences_of("month") as i32,
+            matches.occurrences_of("week") as i32,
+            matches.occurrences_of("day") as i32,
             matches.value_of("from"),
             matches.value_of("to"),
-        );
-    } else if let Some(matches) = matches.subcommand_matches("generate-completions") {
-        if matches.is_present("shell") {
-            match matches.value_of("shell") {
-                Some("bash") => cli.gen_completions_to("doug", Shell::Bash, &mut stdout()),
-                Some("zsh") => cli.gen_completions_to("doug", Shell::Zsh, &mut stdout()),
-                Some("fish") => cli.gen_completions_to("doug", Shell::Fish, &mut stdout()),
-                Some("powershell") => {
-                    cli.gen_completions_to("doug", Shell::PowerShell, &mut stdout())
-                }
-                _ => eprintln!("Invalid option"),
+        ),
+        ("generate-completions", Some(matches)) => match matches.value_of("shell") {
+            Some("bash") => {
+                cli.gen_completions_to("doug", Shell::Bash, &mut stdout());
+                Ok(None)
             }
+            Some("zsh") => {
+                cli.gen_completions_to("doug", Shell::Zsh, &mut stdout());
+                Ok(None)
+            }
+            Some("fish") => {
+                cli.gen_completions_to("doug", Shell::Fish, &mut stdout());
+                Ok(None)
+            }
+            Some("powershell") => {
+                cli.gen_completions_to("doug", Shell::PowerShell, &mut stdout());
+                Ok(None)
+            }
+            _ => Err("Invalid option".to_string()),
+        },
+        ("edit", Some(matches)) => doug.edit(matches.value_of("start"), matches.value_of("end")),
+        ("stop", Some(_)) => doug.stop(),
+        ("cancel", Some(_)) => doug.cancel(),
+        ("restart", Some(_)) => doug.restart(),
+        ("log", Some(_)) => doug.log(),
+        ("settings", Some(matches)) => {
+            doug.settings(matches.value_of("path"), matches.is_present("clear"))
         }
-    } else {
-        match matches.subcommand_name() {
-            Some("stop") => doug.stop(),
-            Some("cancel") => doug.cancel(),
-            Some("restart") => doug.restart(),
-            Some("log") => doug.log(),
-            Some("edit") => doug.edit(),
-            _ => {}
+        (_, Some(_)) | (_, None) => unreachable!(),
+    };
+
+    match results {
+        Ok(m) => if let Some(m) = m {
+            print!("{}", m)
+        },
+        Err(e) => {
+            eprintln!("{} {}", "Error:".red(), e);
+            process::exit(1)
         }
     }
 }
