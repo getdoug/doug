@@ -89,11 +89,12 @@ impl Doug {
     /// # extern crate doug;
     /// # use doug::*;
     /// # let tempdir = tempfile::tempdir().unwrap().into_path();
+    /// # let tempdir = tempdir.to_string_lossy();
     /// #
     /// // Create a new Doug instance with default data location
     /// let doug = Doug::new(None).unwrap();
     ///
-    /// let doug = Doug::new(Some(tempdir)).unwrap();
+    /// let doug = Doug::new(Some(&tempdir)).unwrap();
     /// ```
     pub fn new(path: Option<&str>) -> Result<Self, String> {
         let folder = match path {
@@ -160,9 +161,10 @@ impl Doug {
     /// # extern crate tempfile;
     /// # extern crate doug;
     /// # let tempdir = tempfile::tempdir().unwrap().into_path();
+    /// # let tempdir = tempdir.to_string_lossy();
     /// # use doug::*;
     /// // We don't want to mess with existing installations
-    /// # let mut doug = Doug::new(Some(tempdir)).unwrap();
+    /// # let mut doug = Doug::new(Some(&tempdir)).unwrap();
     /// #
     /// // with no running project, this will return Err
     /// doug.status(false, false).expect_err("No running project");
