@@ -241,7 +241,7 @@ fn main() {
 
     match results {
         Ok(m) => if let Some(m) = m {
-            print!("{}", m)
+            println!("{}", m)
         },
         Err(e) => {
             eprintln!("{} {}", "Error:".red(), e);
