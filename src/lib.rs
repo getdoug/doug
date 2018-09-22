@@ -95,9 +95,9 @@ impl Doug {
     ///
     /// let doug = Doug::new(Some(tempdir)).unwrap();
     /// ```
-    pub fn new(path: Option<PathBuf>) -> Result<Self, String> {
+    pub fn new(path: Option<&str>) -> Result<Self, String> {
         let folder = match path {
-            Some(path) => path,
+            Some(path) => PathBuf::from(path),
             None => {
                 let home_dir = env::var("HOME").map_err(|_| "Failed to find home directory from environment 'HOME'. Doug needs 'HOME' to be set to find its data.".to_string())?;
                 let mut folder = PathBuf::from(home_dir);

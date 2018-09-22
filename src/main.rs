@@ -34,7 +34,13 @@ fn main() {
                 AppSettings::SubcommandRequiredElseHelp,
                 AppSettings::VersionlessSubcommands,
                 AppSettings::DisableHelpSubcommand,
-            ]).subcommand(
+                AppSettings::ColorAuto,
+            ]).arg(
+                Arg::with_name("path")
+                    .short("p")
+                    .long("path")
+                    .help("Path to load settings file from. (default: ~/.doug/settings.json)"),
+            ).subcommand(
                 SubCommand::with_name("start")
                     .about("Track new or existing project")
                     .arg(Arg::with_name("project").help(
@@ -170,7 +176,7 @@ fn main() {
 
     let matches = cli.clone().get_matches();
 
-    let mut doug = match Doug::new(None) {
+    let mut doug = match Doug::new(matches.value_of("path")) {
         Ok(x) => x,
         Err(e) => {
             eprintln!("Error: {}", e);
