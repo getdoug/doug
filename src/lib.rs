@@ -197,6 +197,9 @@ impl Doug {
         }
     }
 
+    /// Save period data to file.
+    ///
+    /// A backup of the data file will be made before serializing the data.
     pub fn save(&self) -> DougResult {
         let serialized = serde_json::to_string(&self.periods)
             .map_err(|_| "Couldn't serialize data to string".to_string())?;
@@ -215,8 +218,13 @@ impl Doug {
         Ok(None)
     }
 
+    /// Start tracking a project.
+    ///
+    /// In the CLI, we call [Doug::restart] if no `project_name` is provided.
+    ///
+    /// # Arguments
+    /// * `project_name` — name of project to start tracking a new period with.
     pub fn start(&mut self, project_name: &str) -> DougResult {
-        // TODO(chdsbd): Replace print with Result<String, &str>
         if !self.periods.is_empty() {
             if let Some(period) = self.periods.last_mut() {
                 if period.end_time.is_none() {
@@ -242,6 +250,9 @@ impl Doug {
         Ok(Some(message))
     }
 
+    /// Change name of currently running period.
+    ///
+    /// Will exit 1 if there isn't any running project.
     pub fn amend(&mut self, project_name: &str) -> DougResult {
         if let Some(mut period) = self.periods.pop() {
             if period.end_time.is_none() {
@@ -260,12 +271,19 @@ impl Doug {
         Err("No project started".to_string())
     }
 
+    /// Aggregate periods per project.
+    ///
+    /// # Arguments
+    /// * `past_years` — number of years to add to counting period
+    /// * `past_months` — number of months to add to period
+    /// * `past_weeks` — number of weeks to add to period
+    /// * `past_days` — number of days to add to period
     pub fn report(
         &self,
-        (past_year, past_year_occur): (bool, i32),
-        (past_month, past_month_occur): (bool, i32),
-        (past_week, past_week_occur): (bool, i32),
-        (past_day, past_day_occur): (bool, i32),
+        past_years: i32,
+        past_months: i32,
+        past_weeks: i32,
+        past_days: i32,
         from_date: Option<&str>,
         to_date: Option<&str>,
     ) -> DougResult {
@@ -326,8 +344,8 @@ impl Doug {
             let duration = intervals.into_iter().fold(Duration::zero(), |acc, x| {
                 // if start time is beyond our limit, but end time is within
                 // add duration of time within boundaries to total
-                if past_year {
-                    let start_limit = today - one_year * past_year_occur;
+                if past_years > 0 {
+                    let start_limit = today - one_year * past_years;
                     acc + add_interval(
                         start_limit,
                         Utc::now(),
@@ -335,8 +353,8 @@ impl Doug {
                         &mut start_date,
                         &mut end_date,
                     )
-                } else if past_month {
-                    let start_limit = today - one_month * past_month_occur;
+                } else if past_months > 0 {
+                    let start_limit = today - one_month * past_months;
                     acc + add_interval(
                         start_limit,
                         Utc::now(),
@@ -344,8 +362,8 @@ impl Doug {
                         &mut start_date,
                         &mut end_date,
                     )
-                } else if past_week {
-                    let start_limit = today - one_week * past_week_occur;
+                } else if past_weeks > 0 {
+                    let start_limit = today - one_week * past_weeks;
                     acc + add_interval(
                         start_limit,
                         Utc::now(),
@@ -353,8 +371,8 @@ impl Doug {
                         &mut start_date,
                         &mut end_date,
                     )
-                } else if past_day {
-                    let start_limit = today - one_day * past_day_occur;
+                } else if past_days > 0 {
+                    let start_limit = today - one_day * past_days;
                     acc + add_interval(
                         start_limit,
                         Utc::now(),
@@ -422,6 +440,11 @@ impl Doug {
         }
         Ok(Some(message))
     }
+
+    /// Remove all periods for a project
+    ///
+    /// # Arguments
+    /// * `project_name` — project to remove
     pub fn delete(&mut self, project_name: &str) -> DougResult {
         let mut project_not_found = true;
         let mut filtered_periods = Vec::new();
@@ -444,9 +467,9 @@ impl Doug {
         }
     }
 
+    /// Restart last running period
     pub fn restart(&mut self) -> DougResult {
         let mut new_periods = self.periods.to_vec();
-        // TODO(sbdchd): we shouldn't need this clone
         if let Some(period) = self.periods.clone().last() {
             if period.end_time.is_some() {
                 let new_period = Period::new(&period.project);
@@ -473,6 +496,8 @@ impl Doug {
         }
         Err("No previous project to restart".to_string())
     }
+
+    /// List periods in chronological order
     pub fn log(&self) -> DougResult {
         let mut days: HashMap<Date<chrono::Local>, Vec<Period>> = HashMap::new();
 
@@ -550,6 +575,7 @@ impl Doug {
         Ok(Some(message))
     }
 
+    /// Stop current period and remove log entry
     pub fn cancel(&mut self) -> DougResult {
         match self.periods.pop() {
             Some(ref mut period) if period.end_time.is_none() => {
@@ -565,6 +591,7 @@ impl Doug {
         }
     }
 
+    /// Stop current period and save stop time
     pub fn stop(&mut self) -> DougResult {
         match self.periods.pop() {
             Some(ref mut period) if period.end_time.is_none() => {
@@ -588,30 +615,30 @@ impl Doug {
         self.periods.last_mut()
     }
 
+    /// Edit last running period.
+    ///
+    /// If no arguments are provided, the data file is open `$EDITOR`.
+    ///
+    /// # Arguments
+    /// * `start` — date to set start time of last period.
+    /// * `end` — date to set end time of last period.
+    ///
+    /// Both arguments accept humanized dates (e.g. `thursday 9:00am`, `today 12:15pm`)
     pub fn edit(&mut self, start: Option<&str>, end: Option<&str>) -> DougResult {
         if let Some(start) = start {
             let date = parse_date_string(start, Local::now(), Dialect::Us)
                 .map_err(|_| format!("Couldn't parse date {}", start))?;
-            {
-                let period = self.last_period().ok_or("no period to edit".to_string())?;
-                period.start_time = date.with_timezone(&Utc);
-            }
-            self.save()?;
-            return Ok(Some(
-                self.clone()
-                    .last_period()
-                    .ok_or("Couldn't find last period.".to_string())?
-                    .to_string(),
-            ));
+            let period = self.last_period().ok_or("no period to edit".to_string())?;
+            period.start_time = date.with_timezone(&Utc);
         }
 
         if let Some(end) = end {
             let date = parse_date_string(end, Local::now(), Dialect::Us)
                 .map_err(|_| format!("Couldn't parse date {}", end))?;
-            {
-                let period = self.last_period().ok_or("no period to edit".to_string())?;
-                period.end_time = Some(date.with_timezone(&Utc));
-            }
+            let period = self.last_period().ok_or("no period to edit".to_string())?;
+            period.end_time = Some(date.with_timezone(&Utc));
+        }
+        if start.is_some() || end.is_some() {
             self.save()?;
             return Ok(Some(
                 self.clone()
@@ -633,7 +660,7 @@ impl Doug {
     }
 }
 
-pub fn add_interval(
+fn add_interval(
     start_limit: DateTime<Utc>,
     end_limit: DateTime<Utc>,
     (start_time, end_time): (DateTime<Utc>, Option<DateTime<Utc>>),

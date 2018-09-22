@@ -177,22 +177,10 @@ fn main() {
         },
         ("status", Some(matches)) => doug.status(matches.is_present("s"), matches.is_present("t")),
         ("report", Some(matches)) => doug.report(
-            (
-                matches.is_present("year"),
-                matches.occurrences_of("year") as i32,
-            ),
-            (
-                matches.is_present("month"),
-                matches.occurrences_of("month") as i32,
-            ),
-            (
-                matches.is_present("week"),
-                matches.occurrences_of("week") as i32,
-            ),
-            (
-                matches.is_present("day"),
-                matches.occurrences_of("day") as i32,
-            ),
+            matches.occurrences_of("year") as i32,
+            matches.occurrences_of("month") as i32,
+            matches.occurrences_of("week") as i32,
+            matches.occurrences_of("day") as i32,
             matches.value_of("from"),
             matches.value_of("to"),
         ),
