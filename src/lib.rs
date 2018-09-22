@@ -461,7 +461,7 @@ impl Doug {
             end = end_date.format("%A %-d %B %Y").to_string().blue()
         );
         results.sort();
-        for &(ref project, ref duration) in &results {
+        for (project, duration) in &results {
             message.push_str(
                 format!(
                     "{project:pwidth$} {duration:>dwidth$}\n",
