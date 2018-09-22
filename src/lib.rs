@@ -59,16 +59,88 @@ impl fmt::Display for Period {
     }
 }
 
+/// Doug settings that are stored on disk
+#[derive(Eq, PartialEq, Serialize, Deserialize, Debug, Clone)]
+struct Settings {
+    /// Specify default location for data file
+    data_location: PathBuf,
+}
+
+impl Settings {
+    /// Load settings.
+    /// If the settings file doesn't exist, it will be created.
+    fn new(folder: &PathBuf) -> Result<Self, String> {
+        DirBuilder::new()
+            .recursive(true)
+            .create(&folder)
+            .map_err(|err| format!("Couldn't create data directory: {:?}\n", err))?;
+
+        // create settings file
+        let location = folder.as_path().join("settings.json");
+        let data_file = OpenOptions::new()
+            .create(true)
+            .read(true)
+            .write(true)
+            .open(&location)
+            .map_err(|err| format!("Couldn't open settings file: {:?}\n", err))?;
+
+        // serialize settings from data file
+        let settings: Result<Settings, Error> = serde_json::from_reader(&data_file);
+
+        match settings {
+            Ok(settings) => Ok(settings),
+            // No settings exist. Create a new settings instance.
+            Err(ref error) if error.is_eof() => {
+                let settings = Settings {
+                    data_location: folder.to_path_buf(),
+                };
+                Settings::save(&settings, folder)?;
+                return Ok(settings);
+            }
+            Err(err) => Err(format!("There was a serialization issue: {:?}\n", err)),
+        }
+    }
+
+    fn save(&self, folder: &PathBuf) -> Result<(), String> {
+        let mut data_file = OpenOptions::new()
+            .create(true)
+            .read(true)
+            .write(true)
+            .open(&folder.join("settings.json"))
+            .map_err(|err| format!("Couldn't open settings file: {:?}\n", err))?;
+
+        let serialized = serde_json::to_string(&self)
+            .map_err(|_| "Couldn't serialize data to string".to_string())?;
+
+        data_file
+            .write_all(serialized.as_bytes())
+            .map_err(|_| "Couldn't write serialized data to file".to_string())?;
+        return Ok(());
+    }
+
+    fn clear(&mut self, folder: &PathBuf) -> Result<(), String> {
+        OpenOptions::new()
+            .create(true)
+            .read(true)
+            .write(true)
+            .truncate(true)
+            .open(&folder.join("settings.json"))
+            .map_err(|err| format!("Couldn't clear settings file: {:?}\n", err))?;
+        Ok(())
+    }
+}
+
 /// Doug, a time tracking command-line utility.
 ///
 /// This is the backend where all the logic for Doug is kept.
 /// The current implementation uses `$HOME/.doug/` for storing data,
 /// while the CLI stuff is handled by [clap] in `main.rs`.
-#[derive(Default, Clone)]
+#[derive(Clone)]
 pub struct Doug {
     periods: Vec<Period>,
-    /// Path to periods.json file for storing doug data.
-    location: PathBuf,
+    /// Path to settings.json file
+    settings: Settings,
+    settings_location: PathBuf,
 }
 
 type DougResult = Result<Option<String>, String>;
@@ -104,14 +176,16 @@ impl Doug {
             }
         };
 
+        let settings = Settings::new(&folder)?;
+
         // create .doug directory
         DirBuilder::new()
             .recursive(true)
-            .create(&folder)
+            .create(&settings.data_location)
             .map_err(|_| format!("Couldn't create data directory: {:?}\n", folder))?;
 
         // create data file
-        let location = folder.as_path().join("periods.json");
+        let location = settings.data_location.as_path().join("periods.json");
         let data_file = OpenOptions::new()
             .create(true)
             .read(true)
@@ -123,11 +197,16 @@ impl Doug {
         let periods: Result<Vec<Period>, Error> = serde_json::from_reader(data_file);
 
         match periods {
-            Ok(periods) => Ok(Doug { periods, location }),
+            Ok(periods) => Ok(Doug {
+                periods,
+                settings,
+                settings_location: folder,
+            }),
             // No periods exist. Create a new Doug instance.
             Err(ref error) if error.is_eof() => Ok(Doug {
                 periods: Vec::new(),
-                location,
+                settings,
+                settings_location: folder,
             }),
             Err(error) => Err(format!("There was a serialization issue: {:?}\n", error)),
         }
@@ -197,25 +276,50 @@ impl Doug {
         }
     }
 
+    pub fn settings(&mut self, path: Option<&str>, clear: bool) -> DougResult {
+        if clear {
+            self.settings.clear(&self.settings_location)?;
+            return Ok(Some("Cleared settings file".to_string()));
+        }
+        if let Some(path) = path {
+            DirBuilder::new()
+                .recursive(true)
+                .create(&path)
+                .map_err(|err| format!("Couldn't create data directory: {:?}\n", err))?;
+            self.settings.data_location = PathBuf::from(path);
+            self.settings.save(&self.settings_location)?;
+            self.save()?;
+        }
+        Ok(Some(format!(
+            "{}:\n{:#?}",
+            self.settings_location.to_string_lossy(),
+            self.settings
+        )))
+    }
+
     /// Save period data to file.
     ///
     /// A backup of the data file will be made before serializing the data.
     pub fn save(&self) -> DougResult {
         let serialized = serde_json::to_string(&self.periods)
             .map_err(|_| "Couldn't serialize data to string".to_string())?;
-        let mut location_backup = self.location.clone();
+        let mut location_backup = self.data_location();
         location_backup.set_extension("json-backup");
-        fs::copy(&self.location, &location_backup)
-            .map_err(|_| "Couldn't create backup file".to_string())?;
+        fs::copy(&self.data_location(), &location_backup)
+            .map_err(|err| format!("Couldn't create backup file: {:?}", err))?;
         let mut file = OpenOptions::new()
             .create(true)
             .write(true)
             .truncate(true)
-            .open(&self.location)
-            .map_err(|_| "Couldn't open file for saving period.".to_string())?;
+            .open(&self.data_location())
+            .map_err(|err| format!("Couldn't open file for saving period: {:?}", err))?;
         file.write_all(serialized.as_bytes())
             .map_err(|_| "Couldn't write serialized data to file".to_string())?;
         Ok(None)
+    }
+
+    fn data_location(&self) -> PathBuf {
+        self.settings.data_location.clone().join("periods.json")
     }
 
     /// Start tracking a project.
@@ -649,11 +753,11 @@ impl Doug {
         }
         let message = format!(
             "File: {}\n",
-            self.location.to_str().ok_or("Invalid path")?.blue()
+            self.data_location().to_str().ok_or("Invalid path")?.blue()
         );
         let editor = env::var("EDITOR").map_err(|_| "Couldn't open editor".to_string())?;
         let mut edit = Command::new(editor);
-        edit.arg(self.location.clone());
+        edit.arg(self.data_location().clone());
         edit.status()
             .map_err(|_| "Problem with editing.".to_string())?;
         Ok(Some(message))

@@ -128,6 +128,23 @@ fn main() {
                             .help("ending date")
                             .takes_value(true),
                     ),
+            )
+            .subcommand(
+                SubCommand::with_name("settings")
+                .about("configure doug settings")
+                .arg(
+                    Arg::with_name("path")
+                    .short("p")
+                    .long("path")
+                    .takes_value(true)
+                    .help("path to store data file")
+                    .long_help("path to store data file. this only affects the data file location. settings are stored in $HOME.")
+                ).arg(
+                    Arg::with_name("clear")
+                    .short("c")
+                    .long("clear")
+                    .help("clear settings file")
+                )
             ).subcommand(
                 SubCommand::with_name("generate-completions")
                     .about("Generate completions")
@@ -208,6 +225,9 @@ fn main() {
         ("cancel", Some(_)) => doug.cancel(),
         ("restart", Some(_)) => doug.restart(),
         ("log", Some(_)) => doug.log(),
+        ("settings", Some(matches)) => {
+            doug.settings(matches.value_of("path"), matches.is_present("clear"))
+        }
         (_, Some(_)) | (_, None) => unreachable!(),
     };
 
