@@ -339,34 +339,18 @@ impl Doug {
         let one_day = Duration::days(1);
         let today = Utc::now();
 
-        let mut from_date_parsed = Local::today();
-        let mut to_date_parsed = Local::today();
-        let offset = *to_date_parsed.offset();
-
-        if let Some(from_date_string) = from_date {
-            match NaiveDate::parse_from_str(from_date_string, "%Y-%m-%d") {
-                Ok(result) => {
-                    from_date_parsed = Date::from_utc(result, offset);
-                }
-                Err(_error) => {
-                    let mut error = "Invalid date format.\n".to_string();
-                    error.push_str(format!("Required format: {}", "%Y-%m-%d".blue()).as_str());
-                    return Err(error);
-                }
-            }
-        }
-        if let Some(to_date_string) = to_date {
-            match NaiveDate::parse_from_str(to_date_string, "%Y-%m-%d") {
-                Ok(result) => {
-                    to_date_parsed = Date::from_utc(result, offset);
-                }
-                Err(_error) => {
-                    let mut error = "Invalid date format.\n".to_string();
-                    error.push_str(format!("Required format: {}", "%Y-%m-%d".blue()).as_str());
-                    return Err(error);
-                }
-            }
-        }
+        let from_date_parsed: Date<Local> = match from_date {
+            Some(x) => parse_date_string(x, Local::now(), Dialect::Us)
+                .map_err(|_| format!("Couldn't parse date {}", x))?
+                .date(),
+            None => Local::today(),
+        };
+        let to_date_parsed: Date<Local> = match to_date {
+            Some(x) => parse_date_string(x, Local::now(), Dialect::Us)
+                .map_err(|_| format!("Couldn't parse date {}", x))?
+                .date(),
+            None => Local::today(),
+        };
 
         // organize periods by project
         for period in &self.periods {
