@@ -76,7 +76,7 @@ dependencies = [
 
 [[package]]
 name = "doug"
-version = "1.9.2"
+version = "1.9.3"
 dependencies = [
  "atty 0.2.3 (registry+https://github.com/rust-lang/crates.io-index)",
  "chrono 0.4.0 (registry+https://github.com/rust-lang/crates.io-index)",
