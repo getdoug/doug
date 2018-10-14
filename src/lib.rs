@@ -443,8 +443,8 @@ impl Doug {
         }
         let mut message = format!(
             "{start} -> {end}\n",
-            start = start_date.format("%A %-d %B %Y").to_string().blue(),
-            end = end_date.format("%A %-d %B %Y").to_string().blue()
+            start = from_date_parsed.format("%A %-d %B %Y").to_string().blue(),
+            end = to_date_parsed.format("%A %-d %B %Y").to_string().blue()
         );
         results.sort();
         for (project, duration) in &results {
