@@ -36,9 +36,9 @@ jobs:
       - run:
           name: install dependencies
           command: |
-            rustup install nightly
-            rustup component add clippy-preview --toolchain=nightly
-            rustup component add rustfmt-preview --toolchain nightly
+            rustup update
+            rustup component add clippy-preview
+            rustup component add rustfmt-preview
       - save_cache:
           paths:
             - ~/.cargo/
@@ -46,8 +46,8 @@ jobs:
       - run:
           name: run lints
           command: |
-            cargo +nightly clippy -- -Dwarnings
-            cargo +nightly fmt
+            cargo clippy -- -Dwarnings
+            cargo fmt
 
 workflows:
   version: 2
