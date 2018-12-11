@@ -1,12 +1,4 @@
 #![allow(clippy::new_ret_no_self)]
-extern crate chrono;
-extern crate chrono_english;
-extern crate clap;
-extern crate colored;
-extern crate serde;
-#[macro_use]
-extern crate serde_derive;
-extern crate serde_json;
 
 pub mod format;
 pub mod settings;
@@ -14,6 +6,7 @@ pub mod settings;
 use std::cmp::{max, min};
 use std::collections::HashMap;
 use std::env;
+use std::fmt;
 use std::fs;
 use std::fs::{DirBuilder, OpenOptions};
 use std::io::Write;
@@ -23,8 +16,8 @@ use std::process::Command;
 use chrono::{Date, DateTime, Duration, Local, NaiveDate, TimeZone, Utc};
 use chrono_english::{parse_date_string, Dialect};
 use colored::*;
+use serde_derive::{Deserialize, Serialize};
 use serde_json::Error;
-use std::fmt;
 
 type ProjectName = String;
 
