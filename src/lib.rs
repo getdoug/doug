@@ -1,3 +1,4 @@
+#![allow(clippy::new_ret_no_self)]
 extern crate chrono;
 extern crate chrono_english;
 extern crate clap;
@@ -10,6 +11,7 @@ extern crate serde_json;
 pub mod format;
 pub mod settings;
 
+use std::cmp::{max, min};
 use std::collections::HashMap;
 use std::env;
 use std::fs;
@@ -24,9 +26,11 @@ use colored::*;
 use serde_json::Error;
 use std::fmt;
 
+type ProjectName = String;
+
 #[derive(Eq, PartialEq, Serialize, Deserialize, Debug, Clone)]
 pub struct Period {
-    project: String,
+    project: ProjectName,
     start_time: DateTime<Utc>,
     end_time: Option<DateTime<Utc>>,
 }
@@ -269,7 +273,8 @@ impl Doug {
                         format!(
                             "Try stopping your current project with {} first.",
                             "stop".blue()
-                        ).as_str(),
+                        )
+                        .as_str(),
                     );
                     return Err(error);
                 }
@@ -308,12 +313,6 @@ impl Doug {
     }
 
     /// Aggregate periods per project.
-    ///
-    /// # Arguments
-    /// * `past_years` — number of years to add to counting period
-    /// * `past_months` — number of months to add to period
-    /// * `past_weeks` — number of weeks to add to period
-    /// * `past_days` — number of days to add to period
     pub fn report(
         &self,
         past_years: i32,
@@ -323,35 +322,41 @@ impl Doug {
         from_date: Option<&str>,
         to_date: Option<&str>,
     ) -> DougResult {
-        let mut days: HashMap<String, Vec<Period>> = HashMap::new();
-        let mut start_date = Utc::today().with_timezone(&Local);
-        let mut end_date = Utc
-            .from_utc_date(&NaiveDate::from_ymd(1, 1, 1))
-            .with_timezone(&Local);
+        let (from_date, to_date): (Date<Local>, Date<Local>) =
+            if past_years > 0 || past_months > 0 || past_weeks > 0 || past_days > 0 {
+                let duration = Duration::weeks((52_i32 * past_years).into())
+                    + Duration::weeks((4_i32 * past_months).into())
+                    + Duration::weeks(past_weeks.into())
+                    + Duration::days(past_days.into());
+                let today = Local::now().date();
+                let start = today - duration;
 
-        let mut results: Vec<(String, Duration)> = Vec::new();
-        let mut max_proj_len = 0;
-        let mut max_diff_len = 0;
+                (start, today)
+            } else {
+                let from_date_parsed: Date<Local> = {
+                    if let Some(from) = from_date {
+                        parse_date_string(&from, Local::now(), Dialect::Us)
+                            .map_err(|_| format!("Couldn't parse date {}", from))?
+                            .date()
+                    } else {
+                        Utc.from_utc_date(&NaiveDate::from_ymd(1, 1, 1))
+                            .with_timezone(&Local)
+                    }
+                };
+                let to_date_parsed: Date<Local> = {
+                    if let Some(to) = to_date {
+                        parse_date_string(&to, Local::now(), Dialect::Us)
+                            .map_err(|_| format!("Couldn't parse date {}", to))?
+                            .date()
+                    } else {
+                        Local::now().date()
+                    }
+                };
 
-        let one_year = Duration::days(365);
-        let one_month = Duration::days(31);
-        let one_week = Duration::weeks(1);
-        let one_day = Duration::days(1);
-        let today = Utc::now();
+                (from_date_parsed, to_date_parsed)
+            };
 
-        let from_date_parsed: Date<Local> = match from_date {
-            Some(x) => parse_date_string(x, Local::now(), Dialect::Us)
-                .map_err(|_| format!("Couldn't parse date {}", x))?
-                .date(),
-            None => Local::today(),
-        };
-        let to_date_parsed: Date<Local> = match to_date {
-            Some(x) => parse_date_string(x, Local::now(), Dialect::Us)
-                .map_err(|_| format!("Couldn't parse date {}", x))?
-                .date(),
-            None => Local::today(),
-        };
-
+        let mut days: HashMap<ProjectName, Vec<Period>> = HashMap::new();
         // organize periods by project
         for period in &self.periods {
             days.entry(period.project.clone())
@@ -359,69 +364,32 @@ impl Doug {
                 .push(period.clone());
         }
 
+        let mut results: Vec<(ProjectName, Duration)> = Vec::new();
+
+        let mut max_proj_len = 0;
+        let mut max_diff_len = 0;
+
+        // start of the earliest interval
+        let mut min_start_date = Local::now().date();
+
         for (project, intervals) in &days {
             // sum total time per project
-            let duration = intervals.into_iter().fold(Duration::zero(), |acc, x| {
-                // if start time is beyond our limit, but end time is within
-                // add duration of time within boundaries to total
-                if past_years > 0 {
-                    let start_limit = today - one_year * past_years;
-                    acc + add_interval(
-                        start_limit,
-                        Utc::now(),
-                        (x.start_time, x.end_time),
-                        &mut start_date,
-                        &mut end_date,
-                    )
-                } else if past_months > 0 {
-                    let start_limit = today - one_month * past_months;
-                    acc + add_interval(
-                        start_limit,
-                        Utc::now(),
-                        (x.start_time, x.end_time),
-                        &mut start_date,
-                        &mut end_date,
-                    )
-                } else if past_weeks > 0 {
-                    let start_limit = today - one_week * past_weeks;
-                    acc + add_interval(
-                        start_limit,
-                        Utc::now(),
-                        (x.start_time, x.end_time),
-                        &mut start_date,
-                        &mut end_date,
-                    )
-                } else if past_days > 0 {
-                    let start_limit = today - one_day * past_days;
-                    acc + add_interval(
-                        start_limit,
-                        Utc::now(),
-                        (x.start_time, x.end_time),
-                        &mut start_date,
-                        &mut end_date,
-                    )
-                } else if from_date.is_some() || to_date.is_some() {
-                    let start_limit = from_date_parsed.and_hms(0, 0, 0).with_timezone(&Utc);
-                    let end_limit = to_date_parsed.and_hms(0, 0, 0).with_timezone(&Utc);
-                    acc + add_interval(
-                        start_limit,
-                        end_limit,
-                        (x.start_time, x.end_time),
-                        &mut start_date,
-                        &mut end_date,
-                    )
+            let duration = intervals.into_iter().fold(Duration::zero(), |acc, period| {
+                let period_start_time = period.start_time.with_timezone(&Local);
+
+                let period_duration: Duration = period
+                    .end_time
+                    .unwrap_or_else(Utc::now)
+                    .signed_duration_since(period_start_time);
+
+                let is_valid_start =
+                    from_date <= period_start_time.date() && period_start_time.date() <= to_date;
+
+                if is_valid_start {
+                    min_start_date = min(min_start_date, period_start_time.date());
+                    acc + period_duration
                 } else {
-                    let end_time = x.end_time.unwrap_or_else(Utc::now);
-                    if x.start_time.with_timezone(&Local).date() < start_date {
-                        start_date = x.start_time.with_timezone(&Local).date();
-                    }
-                    if end_time.with_timezone(&Local).date() > end_date {
-                        end_date = end_time.with_timezone(&Local).date();
-                    }
-                    acc + (x
-                        .end_time
-                        .unwrap_or_else(Utc::now)
-                        .signed_duration_since(x.start_time))
+                    acc
                 }
             });
 
@@ -431,20 +399,19 @@ impl Doug {
             }
 
             // find lengths of project names for alignment
-            if project.to_string().len() > max_proj_len {
-                max_proj_len = project.to_string().len();
-            }
+            max_proj_len = max(project.to_string().len(), max_proj_len);
             // find lengths of durations names for alignment
+            max_diff_len = max(
+                format::duration(duration).len(),
+                format::duration(duration).len(),
+            );
 
-            if format::duration(duration).len() > max_diff_len {
-                max_diff_len = format::duration(duration).len();
-            }
             results.push((project.clone(), duration));
         }
         let mut message = format!(
             "{start} -> {end}\n",
-            start = from_date_parsed.format("%A %-d %B %Y").to_string().blue(),
-            end = to_date_parsed.format("%A %-d %B %Y").to_string().blue()
+            start = min_start_date.format("%A %-d %B %Y").to_string().blue(),
+            end = to_date.format("%A %-d %B %Y").to_string().blue()
         );
         results.sort();
         for (project, duration) in &results {
@@ -455,7 +422,8 @@ impl Doug {
                     duration = format::duration(*duration).bold(),
                     pwidth = max_proj_len,
                     dwidth = max_diff_len
-                ).as_str(),
+                )
+                .as_str(),
             );
         }
         Ok(Some(message))
@@ -509,7 +477,8 @@ impl Doug {
                     format!(
                         "Try stopping your current project with {} first.",
                         "stop".blue()
-                    ).as_str(),
+                    )
+                    .as_str(),
                 );
                 return Err(error);
             }
@@ -550,7 +519,8 @@ impl Doug {
                         .to_string()
                         .green(),
                     duration = format::duration(d).bold()
-                ).as_str(),
+                )
+                .as_str(),
             );
             // find time tracker per period
             let mut project_periods = Vec::new();
@@ -573,7 +543,8 @@ impl Doug {
                                 diff = format::duration(diff),
                                 project = period.project.clone().blue(),
                                 width = 11
-                            ).as_str(),
+                            )
+                            .as_str(),
                         );
                     }
                     None => {
@@ -586,7 +557,8 @@ impl Doug {
                                 diff = format::duration(diff),
                                 project = period.project.clone().blue(),
                                 width = 11
-                            ).as_str(),
+                            )
+                            .as_str(),
                         );
                     }
                 }
@@ -681,58 +653,5 @@ impl Doug {
         edit.status()
             .map_err(|_| "Problem with editing.".to_string())?;
         Ok(Some(message))
-    }
-}
-
-fn add_interval(
-    start_limit: DateTime<Utc>,
-    end_limit: DateTime<Utc>,
-    (start_time, end_time): (DateTime<Utc>, Option<DateTime<Utc>>),
-    start_date: &mut Date<Local>,
-    end_date: &mut Date<Local>,
-) -> Duration {
-    // Accumulates intervals based on limits.
-    // Finds earliest start date for printing out later
-    let end_time = end_time.unwrap_or_else(Utc::now);
-    // start time is within starting limit
-    if start_time >= start_limit && start_time <= end_limit {
-        // Find starting date
-        if start_time.with_timezone(&Local).date() < *start_date {
-            *start_date = start_time.with_timezone(&Local).date();
-        }
-
-        // end time is outside of end limit
-        if end_time > end_limit {
-            if end_limit.with_timezone(&Local).date() > *end_date {
-                *end_date = end_limit.with_timezone(&Local).date();
-            }
-            end_limit.signed_duration_since(start_time)
-        } else {
-            if end_time.with_timezone(&Local).date() > *end_date {
-                *end_date = end_time.with_timezone(&Local).date();
-            }
-            end_time.signed_duration_since(start_time)
-        }
-    } else if end_time >= start_limit && end_time <= end_limit {
-        // Find starting date
-        if start_limit.with_timezone(&Local).date() < *start_date {
-            *start_date = start_limit.with_timezone(&Local).date();
-        }
-
-        if end_time > end_limit {
-            if end_limit.with_timezone(&Local).date() > *end_date {
-                *end_date = end_limit.with_timezone(&Local).date();
-            }
-
-            end_limit.signed_duration_since(start_time)
-        } else {
-            if end_time.with_timezone(&Local).date() > *end_date {
-                *end_date = end_time.with_timezone(&Local).date();
-            }
-
-            end_time.signed_duration_since(start_limit)
-        }
-    } else {
-        Duration::zero()
     }
 }
