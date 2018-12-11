@@ -1,3 +1,4 @@
+#![allow(clippy::new_ret_no_self)]
 extern crate chrono;
 extern crate chrono_english;
 extern crate clap;
@@ -272,7 +273,8 @@ impl Doug {
                         format!(
                             "Try stopping your current project with {} first.",
                             "stop".blue()
-                        ).as_str(),
+                        )
+                        .as_str(),
                     );
                     return Err(error);
                 }
@@ -420,7 +422,8 @@ impl Doug {
                     duration = format::duration(*duration).bold(),
                     pwidth = max_proj_len,
                     dwidth = max_diff_len
-                ).as_str(),
+                )
+                .as_str(),
             );
         }
         Ok(Some(message))
@@ -474,7 +477,8 @@ impl Doug {
                     format!(
                         "Try stopping your current project with {} first.",
                         "stop".blue()
-                    ).as_str(),
+                    )
+                    .as_str(),
                 );
                 return Err(error);
             }
@@ -515,7 +519,8 @@ impl Doug {
                         .to_string()
                         .green(),
                     duration = format::duration(d).bold()
-                ).as_str(),
+                )
+                .as_str(),
             );
             // find time tracker per period
             let mut project_periods = Vec::new();
@@ -538,7 +543,8 @@ impl Doug {
                                 diff = format::duration(diff),
                                 project = period.project.clone().blue(),
                                 width = 11
-                            ).as_str(),
+                            )
+                            .as_str(),
                         );
                     }
                     None => {
@@ -551,7 +557,8 @@ impl Doug {
                                 diff = format::duration(diff),
                                 project = period.project.clone().blue(),
                                 width = 11
-                            ).as_str(),
+                            )
+                            .as_str(),
                         );
                     }
                 }
