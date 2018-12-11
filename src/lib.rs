@@ -375,16 +375,13 @@ impl Doug {
             let duration = intervals.into_iter().fold(Duration::zero(), |acc, period| {
                 let period_start_time = period.start_time.with_timezone(&Local);
 
+                let period_duration: Duration = period
+                    .end_time
+                    .unwrap_or_else(Utc::now)
+                    .signed_duration_since(period_start_time);
+
                 let is_valid_start =
                     from_date <= period_start_time.date() && period_start_time.date() <= to_date;
-
-                let period_end_time = match period.end_time {
-                    Some(time) => time,
-                    None => Utc::now(),
-                };
-
-                let period_duration: Duration =
-                    period_end_time.signed_duration_since(period_start_time);
 
                 if is_valid_start {
                     min_start_date = min(min_start_date, period_start_time.date());
