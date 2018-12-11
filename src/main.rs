@@ -244,9 +244,9 @@ fn main() {
             // There are some inconsistencies for outputs so some commands return new lines and
             // some don't
             println!("{}", m.trim_right())
-        },
+        }
         // nothing to print
-        Ok(None) => {},
+        Ok(None) => {}
         Err(e) => {
             eprintln!("{} {}", "Error:".red(), e);
             process::exit(1)
