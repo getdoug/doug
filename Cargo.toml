@@ -5,8 +5,8 @@ repository = "https://github.com/chdsbd/doug"
 documentation = "https://github.com/chdsbd/doug/blob/master/README.md"
 readme="README.md"
 license = "MIT"
-version = "1.9.3"
-authors = ["Christopher Dignam <chris@dignam.xyz>"]
+version = "1.9.4"
+authors = ["Christopher Dignam <chris@dignam.xyz>", "Steve Dignam <steve@dignam.xyz>"]
 
 [dependencies]
 atty = "0.2.3"
