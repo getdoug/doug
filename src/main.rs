@@ -1,18 +1,9 @@
 #![cfg_attr(test, deny(warnings))]
 
-extern crate atty;
-extern crate chrono;
-#[macro_use]
-extern crate clap;
-extern crate colored;
-extern crate doug;
-extern crate serde;
-extern crate serde_json;
-
 use std::io::stdout;
 
 use atty::Stream;
-use clap::{App, AppSettings, Arg, Shell, SubCommand};
+use clap::{crate_authors, crate_version, App, AppSettings, Arg, Shell, SubCommand};
 use colored::Colorize;
 
 use doug::*;
