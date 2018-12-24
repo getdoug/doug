@@ -1,4 +1,4 @@
-use serde_derive::{Deserialize, Serialize};
+use serde::{Deserialize, Serialize};
 use serde_json;
 use serde_json::Error;
 use std::fs::{DirBuilder, OpenOptions};
