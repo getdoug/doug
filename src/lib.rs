@@ -16,7 +16,7 @@ use std::process::Command;
 use chrono::{Date, DateTime, Duration, Local, NaiveDate, TimeZone, Utc};
 use chrono_english::{parse_date_string, Dialect};
 use colored::*;
-use serde_derive::{Deserialize, Serialize};
+use serde::{Deserialize, Serialize};
 use serde_json::Error;
 
 type ProjectName = String;
