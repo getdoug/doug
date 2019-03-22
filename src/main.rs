@@ -240,7 +240,10 @@ fn main() {
         ("settings", Some(matches)) => {
             doug.settings(matches.value_of("path"), matches.is_present("clear"))
         }
-        ("merge", Some(matches)) => doug.merge(matches.value_of("file").unwrap(), matches.is_present("dryrun")),
+        ("merge", Some(matches)) => doug.merge(
+            matches.value_of("file").unwrap(),
+            matches.is_present("dryrun"),
+        ),
         (_, Some(_)) | (_, None) => unreachable!(),
     };
 

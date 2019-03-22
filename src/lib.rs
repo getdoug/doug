@@ -692,15 +692,24 @@ impl Doug {
                     }
                     // choose the shortest end time first
                     else if self_period.end_time > other_period.end_time {
-                        eprintln!("choosing other period ({}) over self ({})", other_period, self_period);
+                        eprintln!(
+                            "choosing other period ({}) over self ({})",
+                            other_period, self_period
+                        );
                         merged.push((*other_period).clone());
                     } else if self_period.end_time < other_period.end_time {
-                        eprintln!("choosing self period ({}) over other ({})", self_period, other_period);
+                        eprintln!(
+                            "choosing self period ({}) over other ({})",
+                            self_period, other_period
+                        );
                         merged.push((*self_period).clone());
                     }
                 }
                 _ => {
-                    eprintln!("adding period not in self: {} {}", other_period.start_time, other_period);
+                    eprintln!(
+                        "adding period not in self: {} {}",
+                        other_period.start_time, other_period
+                    );
                     merged.push((*other_period).clone());
                 }
             }
