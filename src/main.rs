@@ -234,7 +234,7 @@ fn main() {
         Ok(Some(m)) => {
             // There are some inconsistencies for outputs so some commands return new lines and
             // some don't
-            println!("{}", m.trim_right())
+            println!("{}", m.trim_end())
         }
         // nothing to print
         Ok(None) => {}
