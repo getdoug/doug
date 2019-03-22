@@ -120,7 +120,14 @@ impl Doug {
             .write(true)
             .open(&location)
             .map_err(|_| format!("Couldn't open datafile: {:?}\n", location))?;
+        Doug::load_periods_from_file(&data_file, settings, folder)
+    }
 
+    pub fn load_periods_from_file(
+        data_file: &std::fs::File,
+        settings: settings::Settings,
+        settings_location: std::path::PathBuf,
+    ) -> Result<Self, String> {
         // serialize periods from data file
         let periods: Result<Vec<Period>, Error> = serde_json::from_reader(data_file);
 
@@ -128,13 +135,13 @@ impl Doug {
             Ok(periods) => Ok(Doug {
                 periods,
                 settings,
-                settings_location: folder,
+                settings_location,
             }),
             // No periods exist. Create a new Doug instance.
             Err(ref error) if error.is_eof() => Ok(Doug {
                 periods: Vec::new(),
                 settings,
-                settings_location: folder,
+                settings_location,
             }),
             Err(error) => Err(format!("There was a serialization issue: {:?}\n", error)),
         }
