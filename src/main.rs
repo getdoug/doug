@@ -165,6 +165,19 @@ fn main() {
                             .help("new project name")
                             .required(true),
                     ),
+            ).subcommand(
+                SubCommand::with_name("merge")
+                    .about("Merge periods files.")
+                    .arg(
+                        Arg::with_name("file")
+                            .help("path to period file to merge")
+                            .required(true),
+                    ).arg(
+                        Arg::with_name("dryrun")
+                            .long("dry-run")
+                            .help("don't modify periods file")
+                            .takes_value(false),
+                    ),
             );
 
     let matches = cli.clone().get_matches();
@@ -227,6 +240,7 @@ fn main() {
         ("settings", Some(matches)) => {
             doug.settings(matches.value_of("path"), matches.is_present("clear"))
         }
+        ("merge", Some(matches)) => doug.merge(matches.value_of("file").unwrap(), matches.is_present("dryrun")),
         (_, Some(_)) | (_, None) => unreachable!(),
     };
 
