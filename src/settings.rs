@@ -6,7 +6,7 @@ use std::io::Write;
 use std::path::PathBuf;
 
 /// Doug settings that are stored on disk
-#[derive(Eq, PartialEq, Serialize, Deserialize, Debug, Clone)]
+#[derive(Eq, PartialEq, Serialize, Deserialize, Debug, Clone, Default)]
 pub struct Settings {
     /// Specify default location for data file
     pub data_location: PathBuf,

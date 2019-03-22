@@ -190,6 +190,21 @@ FLAGS:
 ARGS:
     <project>    new project name
 ```
+### merge
+```
+Merge period files
+
+USAGE:
+    doug merge [FLAGS] <file>
+
+FLAGS:
+        --dry-run    don't modify period file
+    -h, --help       Prints help information
+
+ARGS:
+    <file>    path to period file to merge
+```
+
 ## Prior Art
 
 - <http://wtime.sourceforge.net>

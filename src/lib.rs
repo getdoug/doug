@@ -10,7 +10,7 @@ use std::fmt;
 use std::fs;
 use std::fs::{DirBuilder, OpenOptions};
 use std::io::Write;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::Command;
 
 use chrono::{Date, DateTime, Duration, Local, NaiveDate, TimeZone, Utc};
@@ -120,7 +120,14 @@ impl Doug {
             .write(true)
             .open(&location)
             .map_err(|_| format!("Couldn't open datafile: {:?}\n", location))?;
+        Doug::load_periods_from_file(&data_file, settings, folder)
+    }
 
+    pub fn load_periods_from_file(
+        data_file: &std::fs::File,
+        settings: settings::Settings,
+        settings_location: std::path::PathBuf,
+    ) -> Result<Self, String> {
         // serialize periods from data file
         let periods: Result<Vec<Period>, Error> = serde_json::from_reader(data_file);
 
@@ -128,13 +135,13 @@ impl Doug {
             Ok(periods) => Ok(Doug {
                 periods,
                 settings,
-                settings_location: folder,
+                settings_location,
             }),
             // No periods exist. Create a new Doug instance.
             Err(ref error) if error.is_eof() => Ok(Doug {
                 periods: Vec::new(),
                 settings,
-                settings_location: folder,
+                settings_location,
             }),
             Err(error) => Err(format!("There was a serialization issue: {:?}\n", error)),
         }
@@ -229,7 +236,9 @@ impl Doug {
     /// Save period data to file.
     ///
     /// A backup of the data file will be made before serializing the data.
-    pub fn save(&self) -> DougResult {
+    pub fn save(&mut self) -> DougResult {
+        // sort our periods before we save. This helps with merging.
+        self.periods.sort_by(|a, b| a.start_time.cmp(&b.start_time));
         let serialized = serde_json::to_string(&self.periods)
             .map_err(|_| "Couldn't serialize data to string".to_string())?;
         let mut location_backup = self.data_location();
@@ -367,7 +376,7 @@ impl Doug {
 
         for (project, intervals) in &days {
             // sum total time per project
-            let duration = intervals.into_iter().fold(Duration::zero(), |acc, period| {
+            let duration = intervals.iter().fold(Duration::zero(), |acc, period| {
                 let period_start_time = period.start_time.with_timezone(&Local);
 
                 let period_duration: Duration = period
@@ -497,7 +506,7 @@ impl Doug {
         let mut message = String::new();
         // count the total time tracker per day
         for (date, day) in &days {
-            let d = day.into_iter().fold(Duration::zero(), |acc, x| {
+            let d = day.iter().fold(Duration::zero(), |acc, x| {
                 acc + (x
                     .end_time
                     .unwrap_or_else(Utc::now)
@@ -646,5 +655,71 @@ impl Doug {
         edit.status()
             .map_err(|_| "Problem with editing.".to_string())?;
         Ok(Some(message))
+    }
+
+    /// Merge period file
+    ///
+    /// If two periods have conflicting end times, the one with the earlier end time will be used.
+    ///
+    pub fn merge(&mut self, file_path: &str, dry_run: bool) -> DougResult {
+        // Open other period file as Doug instance
+        let location = Path::new(file_path);
+        let data_file = OpenOptions::new()
+            .read(true)
+            .open(&location)
+            .map_err(|_| format!("Couldn't open datafile: {:?}\n", location))?;
+        let empty_settings = settings::Settings::default();
+        let folder = Path::new("/tmp/doug/empty_settings").to_path_buf();
+        let other_doug = Doug::load_periods_from_file(&data_file, empty_settings, folder)?;
+
+        let mut other_period_map = HashMap::new();
+        for period in other_doug.periods.iter() {
+            other_period_map.insert(period.start_time, period);
+        }
+        let mut self_period_map = HashMap::new();
+        for period in self.periods.iter() {
+            self_period_map.insert(period.start_time, period);
+        }
+
+        // merge both period collections into one
+        let mut merged: Vec<Period> = Vec::new();
+        for (start_time, other_period) in other_period_map.iter() {
+            match self_period_map.get(&start_time) {
+                Some(self_period) => {
+                    // default case. Both files have matching periods
+                    if self_period == other_period {
+                        merged.push((*self_period).clone());
+                    }
+                    // choose the shortest end time first
+                    else if self_period.end_time > other_period.end_time {
+                        eprintln!(
+                            "choosing other period ({}) over self ({})",
+                            other_period, self_period
+                        );
+                        merged.push((*other_period).clone());
+                    } else if self_period.end_time < other_period.end_time {
+                        eprintln!(
+                            "choosing self period ({}) over other ({})",
+                            self_period, other_period
+                        );
+                        merged.push((*self_period).clone());
+                    }
+                }
+                _ => {
+                    eprintln!(
+                        "adding period not in self: {} {}",
+                        other_period.start_time, other_period
+                    );
+                    merged.push((*other_period).clone());
+                }
+            }
+        }
+        if dry_run {
+            Ok(Some("dry run set. not applying changes.".into()))
+        } else {
+            self.periods = merged;
+            self.save()?;
+            Ok(Some("changes applied".into()))
+        }
     }
 }
