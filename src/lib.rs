@@ -236,7 +236,9 @@ impl Doug {
     /// Save period data to file.
     ///
     /// A backup of the data file will be made before serializing the data.
-    pub fn save(&self) -> DougResult {
+    pub fn save(&mut self) -> DougResult {
+        // sort our periods before we save. This helps with merging.
+        self.periods.sort_by(|a, b| a.start_time.cmp(&b.start_time));
         let serialized = serde_json::to_string(&self.periods)
             .map_err(|_| "Couldn't serialize data to string".to_string())?;
         let mut location_backup = self.data_location();
@@ -655,7 +657,7 @@ impl Doug {
         Ok(Some(message))
     }
 
-    /// Merge two period files
+    /// Merge period file
     ///
     /// If two periods have conflicting end times, the one with the earlier end time will be used.
     ///
@@ -688,7 +690,7 @@ impl Doug {
                     if self_period == other_period {
                         merged.push((*self_period).clone());
                     }
-                    // choose the shortest endtime first
+                    // choose the shortest end time first
                     else if self_period.end_time > other_period.end_time {
                         eprintln!("choosing other period ({}) over self ({})", other_period, self_period);
                         merged.push((*other_period).clone());
@@ -698,7 +700,7 @@ impl Doug {
                     }
                 }
                 _ => {
-                    eprintln!("adding period not in self: {}", other_period);
+                    eprintln!("adding period not in self: {} {}", other_period.start_time, other_period);
                     merged.push((*other_period).clone());
                 }
             }
@@ -706,6 +708,8 @@ impl Doug {
         if dry_run {
             Ok(Some("dry run set. not applying changes.".into()))
         } else {
+            self.periods = merged;
+            self.save()?;
             Ok(Some("changes applied".into()))
         }
     }

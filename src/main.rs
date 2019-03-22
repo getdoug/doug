@@ -167,7 +167,7 @@ fn main() {
                     ),
             ).subcommand(
                 SubCommand::with_name("merge")
-                    .about("Merge periods files.")
+                    .about("Merge period files")
                     .arg(
                         Arg::with_name("file")
                             .help("path to period file to merge")
@@ -175,7 +175,7 @@ fn main() {
                     ).arg(
                         Arg::with_name("dryrun")
                             .long("dry-run")
-                            .help("don't modify periods file")
+                            .help("don't modify period file")
                             .takes_value(false),
                     ),
             );
