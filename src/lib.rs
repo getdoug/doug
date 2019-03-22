@@ -376,7 +376,7 @@ impl Doug {
 
         for (project, intervals) in &days {
             // sum total time per project
-            let duration = intervals.into_iter().fold(Duration::zero(), |acc, period| {
+            let duration = intervals.iter().fold(Duration::zero(), |acc, period| {
                 let period_start_time = period.start_time.with_timezone(&Local);
 
                 let period_duration: Duration = period
@@ -506,7 +506,7 @@ impl Doug {
         let mut message = String::new();
         // count the total time tracker per day
         for (date, day) in &days {
-            let d = day.into_iter().fold(Duration::zero(), |acc, x| {
+            let d = day.iter().fold(Duration::zero(), |acc, x| {
                 acc + (x
                     .end_time
                     .unwrap_or_else(Utc::now)
